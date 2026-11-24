@@ -73,9 +73,7 @@ function ProgressRing({ value, small = false }: { value: number; small?: boolean
           strokeWidth="10"
           strokeLinecap="round"
           strokeDasharray={full}
-          strokeDashoffset={full * (1 - value / 100)}
-          className="ring-in"
-          style={{ "--ring-full": full } as React.CSSProperties}
+          strokeDashoffset={full * (1 - shown / 100)}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center text-white">

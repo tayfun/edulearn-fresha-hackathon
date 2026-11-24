@@ -32,9 +32,9 @@ export function HeroArt() {
           <stop offset="0.8" stopColor="#e9a94a" stopOpacity="0.55" />
         </linearGradient>
         <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0" stopColor="#ffd27a" stopOpacity="0.75" />
-          <stop offset="0.35" stopColor="#ffb347" stopOpacity="0.35" />
-          <stop offset="1" stopColor="#ffb347" stopOpacity="0" />
+          <stop offset="0" stopColor="#d9fff3" stopOpacity="0.5" />
+          <stop offset="0.4" stopColor="#8fe3cd" stopOpacity="0.18" />
+          <stop offset="1" stopColor="#8fe3cd" stopOpacity="0" />
         </radialGradient>
         <linearGradient id="ridge1" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#2c8f7d" />
@@ -67,7 +67,7 @@ export function HeroArt() {
         </g>
       </g>
 
-      <circle cx="1040" cy="282" r="190" fill="url(#sun)" className="sun-glow" />
+      <circle cx="1040" cy="282" r="170" fill="url(#sun)" className="sun-glow" />
 
       {/* three ridges, lighter and hazier with distance */}
       <path
@@ -77,12 +77,12 @@ export function HeroArt() {
       <path d="M0 470 C120 430 220 444 330 458 C450 474 540 420 660 436 C780 452 860 468 960 446 C1050 426 1130 440 1200 430 V600 H0 Z" fill="url(#ridge2)" />
       <g fill="#063730">
         {[
-          [1052, 470, 1],
-          [1090, 476, 0.72],
-          [1134, 468, 1.2],
-          [1176, 478, 0.85],
-          [706, 470, 0.7],
-          [738, 474, 0.55],
+          [905, 468, 1],
+          [943, 474, 0.72],
+          [987, 466, 1.2],
+          [1029, 476, 0.85],
+          [640, 472, 0.7],
+          [672, 476, 0.55],
         ].map(([x, y, s], i) => (
           <path key={i} transform={`translate(${x} ${y}) scale(${s})`} d={PINE} />
         ))}
