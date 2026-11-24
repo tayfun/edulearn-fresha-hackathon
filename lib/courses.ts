@@ -10,7 +10,7 @@ export class NotFound extends Error {}
 
 export type CourseRow = {
   id: number; topic: string; title: string; description: string; goal: string; tone: string;
-  prior_knowledge: string; length_preset: LengthPreset; created_at: string; image_svg: string | null; slug: string;
+  prior_knowledge: string; length_preset: LengthPreset; created_at: string; image_svg: string | null; slug: string; assessment: string | null; next_activity: string | null;
 };
 export type LessonRow = {
   id: number; course_id: number; module_id: number; position: number; title: string; objectives: string;
@@ -70,10 +70,17 @@ const OutlineSchema = z.object({
 
 export type CourseInput = {
   topic: string; goal: string; priorKnowledge: string; tone: string; length: LengthPreset;
+  /** A completed diagnostic: its id and the option index chosen per question (-1 = "I don't know"). */
+  assessment?: { id: number; answers: number[] };
 };
 
 export async function createCourse(input: CourseInput): Promise<{ id: number; slug: string }> {
   const preset = LENGTHS[input.length];
+  // Agent steps 1-2: grade the diagnostic and decide what this learner needs to study.
+  const { decideStudyFocus, focusBrief, gradeAssessment } = await import("./agent");
+  const focus = input.assessment
+    ? await decideStudyFocus({ topic: input.topic, goal: input.goal, priorKnowledge: input.priorKnowledge, results: gradeAssessment(input.assessment.id, input.assessment.answers) })
+    : null;
   const grounding = await webSearch(`${input.topic} learning roadmap syllabus`, 5);
   const outline = await chatJson({
     label: `Design the curriculum (${preset.label} course, ${preset.lessons} lesson${preset.lessons === 1 ? "" : "s"})`,
@@ -89,7 +96,7 @@ Rules:
 - Exactly ${preset.modules} module(s) and ${preset.lessons} lesson(s) in total, about ${preset.minutes} minutes of study overall (${preset.label} course).
 - Order lessons so each builds on earlier ones. Reuse the exact same concept name when a later lesson revisits a concept.
 - Fit the scope to the time available: a short course covers the essentials only.
-- Tailor everything to the learner's goal, prior knowledge and level.
+- Tailor everything to the learner's goal, prior knowledge and level. When a diagnostic result is given, it outranks what the learner says they know.
 - Reply with the JSON object only.`,
       },
       {
@@ -97,7 +104,7 @@ Rules:
         content: `Topic: ${input.topic}
 Learner's goal and preferences: ${input.goal || "not specified"}
 Prior knowledge: ${input.priorKnowledge || "not specified"}
-Level / tone: ${input.tone} (${toneInstruction(input.tone)})
+Level / tone: ${input.tone} (${toneInstruction(input.tone)})${focusBrief(focus)}
 ${grounding.length ? `\nWeb search results for grounding (use to judge what matters, do not copy):\n${grounding.map((r) => `- ${r.title}: ${r.snippet.slice(0, 250)}`).join("\n")}` : ""}`,
       },
     ],
@@ -110,8 +117,8 @@ ${grounding.length ? `\nWeb search results for grounding (use to judge what matt
   const save = db.transaction(() => {
     const courseId = Number(
       db
-        .prepare("INSERT INTO courses (topic, title, slug, description, goal, tone, prior_knowledge, length_preset) VALUES (?,?,?,?,?,?,?,?)")
-        .run(input.topic, outline.title, uniqueSlug(db, outline.title), outline.description, input.goal, input.tone, input.priorKnowledge, input.length).lastInsertRowid,
+        .prepare("INSERT INTO courses (topic, title, slug, description, goal, tone, prior_knowledge, length_preset, assessment) VALUES (?,?,?,?,?,?,?,?,?)")
+        .run(input.topic, outline.title, uniqueSlug(db, outline.title), outline.description, input.goal, input.tone, input.priorKnowledge, input.length, focus ? JSON.stringify(focus) : null).lastInsertRowid,
     );
     const conceptIds = new Map<string, number>();
     const moduleIds: { id: number; title: string }[] = [];
@@ -183,11 +190,12 @@ function courseStats(courseId: number) {
 
 export function listCourses() {
   const rows = getDb().prepare("SELECT * FROM courses ORDER BY id DESC").all() as CourseRow[];
-  return rows.map(({ image_svg, ...c }) => {
+  return rows.map((row) => {
+    const c = { ...row, image_svg: undefined, assessment: undefined, next_activity: undefined };
     const s = courseStats(c.id);
     return {
       ...c,
-      image: image_svg,
+      image: row.image_svg,
       lengthLabel: LENGTHS[c.length_preset].label,
       progress: s.progress,
       lessonsTotal: s.lessons.length,
@@ -213,7 +221,7 @@ export function getCourseDetail(id: number) {
   const best = new Map(lessonScores.map((r) => [r.lesson_id, r.best]));
   const lessons = s.lessons.map((l) => ({ ...l, number: l.position + 1, objectives: JSON.parse(l.objectives) as string[], bestScore: best.get(l.id) ?? null }));
   return {
-    course: { ...course, lengthLabel: LENGTHS[course.length_preset].label },
+    course: { ...course, next_activity: undefined, assessment: course.assessment ? JSON.parse(course.assessment) : null, lengthLabel: LENGTHS[course.length_preset].label },
     progress: s.progress,
     lessonsDone: lessons.filter((l) => l.completed_at).length,
     lessonsTotal: lessons.length,
@@ -361,8 +369,8 @@ export function lessonContentStream(id: number) {
         role: "system",
         content: `You are an excellent teacher writing one lesson of a personalised course.
 Style: ${toneInstruction(course.tone)}
-Write the lesson in Markdown, about ${words} words. Do not repeat the lesson title as a heading; start directly with a short hook. Use "##" section headings, short paragraphs, and at least one concrete worked example or analogy. Use tables or code blocks only where they genuinely help. End with a "## Key takeaways" section of 3-5 bullets.
-Do not include quiz questions, and do not invent links or citations.`,
+Write the lesson in Markdown, about ${words} words. Do not repeat the lesson title as a heading; start directly with a short hook. Use "##" section headings, short paragraphs, and at least one concrete worked example or analogy. Use tables or code blocks only where they genuinely help. Then a "## Key takeaways" section of 3-5 bullets, and finally a "## Try it yourself" section: one short, concrete exercise the learner can do in two or three minutes to apply the lesson, followed by a one-line hint that starts with "Hint:" (not the full answer).
+Do not include multiple-choice quiz questions, and do not invent links or citations.`,
       },
       {
         role: "user",

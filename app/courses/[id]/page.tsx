@@ -8,7 +8,17 @@ import { Card, ErrorNote, Loading, ResourceList, api, useLoad } from "@/componen
 
 type Lesson = { id: number; number: number; title: string; est_minutes: number; completed_at: string | null; objectives: string[]; bestScore: number | null };
 type Detail = {
-  course: { id: number; title: string; description: string; topic: string; tone: string; lengthLabel: string; image_svg: string | null; created_at: string };
+  course: {
+    id: number;
+    title: string;
+    description: string;
+    topic: string;
+    tone: string;
+    lengthLabel: string;
+    image_svg: string | null;
+    created_at: string;
+    assessment: null | { summary: string; known: string[]; focus: string[]; start_level: string; score: number; total: number };
+  };
   progress: number;
   lessonsDone: number;
   lessonsTotal: number;
@@ -31,6 +41,8 @@ type Detail = {
   modules: { id: number; title: string; summary: string; lessons: Lesson[]; resources: { id: number; title: string; url: string }[] }[];
   sessions: { id: number; started_at: string; ended_at: string; lessons_done: number; quizzes_done: number; cards_reviewed: number; weaknesses: { name: string }[] }[];
 };
+
+type NextActivity = { action: "lesson" | "practice" | "flashcards" | "revisit" | "complete"; title: string; reason: string; lessonNumber: number | null; decidedBy: "agent" | "rules" };
 
 const fmtMinutes = (m: number) => (m < 60 ? `${m} min` : `${Math.round((m / 60) * 10) / 10} h`);
 /** Drop "Module 2:" / "Lesson 4:" prefixes the model sometimes adds; position is already shown. */
@@ -55,6 +67,18 @@ function useCountUp(target: number, ms = 1200) {
   }, [target, ms]);
   return value;
 }
+
+/** The agent's loop, with where this course currently stands in it. */
+const AGENT_LOOP: [string, (d: Detail) => "done" | "now" | "todo"][] = [
+  ["Assess knowledge", (d) => (d.course.assessment ? "done" : "todo")],
+  ["Decide what to study", (d) => (d.course.assessment ? "done" : "todo")],
+  ["Build curriculum", () => "done"],
+  ["Find resources", (d) => (d.modules.some((m) => m.resources.length) ? "done" : "todo")],
+  ["Teach lessons and exercises", (d) => (d.progress === 100 ? "done" : d.lessonsDone > 0 ? "done" : "now")],
+  ["Evaluate answers", (d) => (d.modules.some((m) => m.lessons.some((l) => l.bestScore !== null)) ? "done" : "todo")],
+  ["Find gaps", (d) => (d.modules.some((m) => m.lessons.some((l) => l.bestScore !== null)) ? "done" : "todo")],
+  ["Choose next activity", (d) => (d.lessonsDone > 0 || d.progress === 100 ? "now" : "todo")],
+];
 
 function Panel({ icon, title, i, children, className = "" }: { icon: Parameters<typeof Icon>[0]["name"]; title: string; i: number; children: React.ReactNode; className?: string }) {
   return (
@@ -296,6 +320,8 @@ export default function CoursePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { data, error, reload } = useLoad<Detail>(`/api/courses/${id}`);
+  // Agent step 8: asked for separately so the dashboard never waits on the decision.
+  const { data: agentNext } = useLoad<NextActivity>(`/api/courses/${id}/next`);
   if (error) return <ErrorNote message={error} onRetry={reload} />;
   if (!data) return <Loading label="Opening your course" />;
   const { course, plan } = data;
@@ -306,6 +332,18 @@ export default function CoursePage() {
   const activeDays = data.activity.flat().filter((d) => d.count > 0).length;
   const scores = allLessons.map((l) => l.bestScore).filter((x): x is number => x !== null);
   const avgScore = scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 100) : null;
+  const base = `/courses/${id}`;
+  const agentHref = !agentNext
+    ? null
+    : agentNext.action === "practice"
+      ? `${base}/weaknesses`
+      : agentNext.action === "flashcards"
+        ? `${base}/flashcards`
+        : agentNext.lessonNumber
+          ? `${base}/${agentNext.lessonNumber}`
+          : null;
+  // Only interrupt the default "next lesson" card when the agent picked something else.
+  const detour = agentNext && agentHref && agentNext.action !== "lesson" && agentNext.action !== "complete" ? agentNext : null;
   const minutesDone = allLessons.filter((l) => l.completed_at).reduce((s, l) => s + l.est_minutes, 0);
 
   async function remove() {
@@ -405,12 +443,27 @@ export default function CoursePage() {
                     Lesson {allLessons.indexOf(nextLesson) + 1} of {data.lessonsTotal} · {nextLesson.est_minutes} min
                   </p>
                   <p className="mt-0.5 text-xl font-bold leading-snug text-white">{bare(nextLesson.title)}</p>
-                  {nextLesson.objectives[0] && <p className="mb-4 mt-1 line-clamp-2 text-sm text-muted">{nextLesson.objectives[0]}</p>}
+                  {detour ? (
+                    <Link href={agentHref!} className="group/agent mb-3 mt-2 block rounded-xl border border-warn/40 bg-warn-soft px-3 py-2 transition hover:border-warn">
+                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-warn">Your agent suggests first</span>
+                      <span className="block text-sm font-semibold text-ink">
+                        {detour.title}{" "}
+                        <span aria-hidden className="inline-block transition-transform group-hover/agent:translate-x-1">
+                          →
+                        </span>
+                      </span>
+                      <span className="block text-xs text-muted">{detour.reason}</span>
+                    </Link>
+                  ) : (
+                    (agentNext?.action === "lesson" ? agentNext.reason : nextLesson.objectives[0]) && (
+                      <p className="mb-4 mt-1 line-clamp-2 text-sm text-muted">{agentNext?.action === "lesson" ? agentNext.reason : nextLesson.objectives[0]}</p>
+                    )
+                  )}
                   <Link
                     href={`/courses/${id}/${nextLesson.number}`}
                     className="glow-btn group mt-auto flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#22d3ee] to-[#5eead4] px-5 py-3 text-sm font-bold text-on-brand transition hover:brightness-110"
                   >
-                    {data.lessonsDone === 0 ? "Start" : "Continue"}
+                    {detour ? "Go to the lesson anyway" : data.lessonsDone === 0 ? "Start" : "Continue"}
                     <span aria-hidden className="transition-transform group-hover:translate-x-1">
                       →
                     </span>
@@ -434,6 +487,80 @@ export default function CoursePage() {
       </div>
 
       <section className="panel rise p-5" style={delay(4)}>
+        <h2 className="flex items-center gap-2 font-sans text-sm font-medium tracking-normal text-ink">
+          <Icon name="target" className="h-[18px] w-[18px] text-brand" />
+          Your learning agent
+        </h2>
+        <ol className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-2 text-xs" aria-label="How the agent works">
+          {AGENT_LOOP.map(([label, state], i) => {
+            const status = state(data);
+            return (
+              <li key={label} className="flex items-center gap-1.5">
+                {i > 0 && (
+                  <span aria-hidden className="text-muted/60">
+                    →
+                  </span>
+                )}
+                <span
+                  className={`rounded-full border px-2.5 py-1 ${status === "now" ? "border-brand bg-brand-soft font-semibold text-brand shadow-[0_0_12px_rgb(34_211_238/0.4)]" : status === "done" ? "border-good/40 text-good" : "border-line text-muted"}`}
+                >
+                  {status === "done" && "✓ "}
+                  {label}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+        {course.assessment ? (
+          <div className="mt-4 grid gap-4 sm:grid-cols-[1.3fr_1fr_1fr]">
+            <p className="text-sm text-ink">
+              <span className="mb-1 block text-xs uppercase tracking-wide text-muted">
+                Knowledge check: {course.assessment.score}/{course.assessment.total}
+                {course.assessment.start_level && ` · ${course.assessment.start_level}`}
+              </span>
+              {course.assessment.summary}
+            </p>
+            {(
+              [
+                ["Course focuses on", course.assessment.focus, "border-brand/40 text-brand"],
+                ["You already know", course.assessment.known, "border-good/40 text-good"],
+              ] as const
+            ).map(([title, items, cls]) => (
+              <div key={title}>
+                <div className="mb-1.5 text-xs uppercase tracking-wide text-muted">{title}</div>
+                {items.length ? (
+                  <ul className="flex flex-wrap gap-1.5">
+                    {items.slice(0, 8).map((c) => (
+                      <li key={c} className={`rounded-full border px-2 py-0.5 text-xs ${cls}`}>
+                        {c}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted">Nothing established yet.</p>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-muted">No knowledge check was taken for this course, so it follows what you told us. Quiz results steer it from here.</p>
+        )}
+        {agentNext && (
+          <p className="mt-4 border-t border-line pt-3 text-sm">
+            <span className="text-muted">Next, the agent recommends: </span>
+            {agentHref ? (
+              <Link href={agentHref} className="font-semibold text-brand hover:underline">
+                {agentNext.title}
+              </Link>
+            ) : (
+              <span className="font-semibold text-ink">{agentNext.title}</span>
+            )}
+            <span className="text-muted"> — {agentNext.reason}</span>
+          </p>
+        )}
+      </section>
+
+      <section className="panel rise p-5" style={delay(5)}>
         <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
           <h2 className="flex shrink-0 items-center gap-2 whitespace-nowrap font-sans text-sm font-medium tracking-normal text-ink">
             <Icon name="flag" className="h-[18px] w-[18px] text-brand" />
@@ -495,7 +622,10 @@ export default function CoursePage() {
             <ul className="mt-3 space-y-2">
               {plan.upNext.map((l) => (
                 <li key={l.id}>
-                  <Link href={`/courses/${id}/${allLessons.find((x) => x.id === l.id)?.number ?? 1}`} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-paper/60 px-4 py-2.5 text-sm transition hover:border-brand">
+                  <Link
+                    href={`/courses/${id}/${allLessons.find((x) => x.id === l.id)?.number ?? 1}`}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-line bg-paper/60 px-4 py-2.5 text-sm transition hover:border-brand"
+                  >
                     <span>{bare(l.title)}</span>
                     <span className="shrink-0 text-xs text-muted">{l.est_minutes} min</span>
                   </Link>

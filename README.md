@@ -16,6 +16,26 @@ Production: `npm run build && npm start`. The database is created on first use
 at `data/edulearn.db` (override with `DATABASE_PATH`), so the host needs a
 persistent disk.
 
+## The EduLearn agent
+
+The app is one agent loop around a learner and a course. Each step is labelled
+`Agent · …` in the debug panel where it makes a decision.
+
+| # | The agent… | Where |
+|---|---|---|
+| 1 | Assesses existing knowledge | `lib/agent.ts` `createAssessment`, `gradeAssessment`: a five-question diagnostic, easy to hard, as the last step of course setup (skippable). |
+| 2 | Decides what the learner needs to study | `lib/agent.ts` `decideStudyFocus`: turns the diagnostic into "already known", "focus on" and a starting level, saved with the course and shown on the dashboard. |
+| 3 | Creates a personalised curriculum | `lib/courses.ts` `createCourse`: the study decision is handed to the curriculum designer and outranks what the learner says they know. |
+| 4 | Searches for relevant educational resources | `lib/tavily.ts`: grounding and per-module links at creation, per-concept links for weak spots. |
+| 5 | Generates lessons and exercises | `lib/courses.ts` `lessonContentStream` (each lesson ends with a "Try it yourself" exercise), `lib/quiz.ts` `createQuiz`. |
+| 6 | Evaluates learner responses | `lib/quiz.ts` `submitAttempt`: multiple choice graded locally, short answers by the model. |
+| 7 | Identifies knowledge gaps | per-concept mastery in `lib/quiz.ts`; diagnosis and advice in `lib/review.ts`. |
+| 8 | Decides what learning activity should happen next | `lib/agent.ts` `decideNextActivity`: picks between the next lesson, a practice quiz, flashcards or re-reading a lesson, with a reason. Shown on the dashboard and after every quiz. |
+
+Step 8 only offers activities that are possible right now, stores its decision
+against the state it was made for (so it is re-made only when something
+changes), and falls back to simple rules if the model cannot be reached.
+
 ## What it does
 
 - **Intake** — topic → 2 topic-specific clarifying questions → teaching style

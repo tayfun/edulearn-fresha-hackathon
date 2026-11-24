@@ -162,9 +162,13 @@ export function slugify(title: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60)
-    .replace(/-+$/g, "");
+    .replace(/^-+|-+$/g, "");
+  // Keep addresses short, cutting at a word boundary rather than mid-word.
+  const short = slug.length <= 48 ? slug : slug.slice(0, 48).replace(/-[^-]*$/, "") || slug.slice(0, 48);
+  return finish(short);
+}
+
+function finish(slug: string): string {
   // An all-digit slug would be indistinguishable from a numeric course id.
   return !slug || /^\d+$/.test(slug) ? `course-${slug || "untitled"}` : slug;
 }

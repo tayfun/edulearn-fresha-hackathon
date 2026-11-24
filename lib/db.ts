@@ -15,6 +15,12 @@ CREATE TABLE IF NOT EXISTS courses (
   length_preset TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS assessments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  topic TEXT NOT NULL,
+  questions TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS modules (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
@@ -144,6 +150,9 @@ export function openDb(file: string): DB {
   if (!cols.some((c) => c.name === "image_svg")) db.exec("ALTER TABLE courses ADD COLUMN image_svg TEXT");
   // Readable course addresses: /courses/black-holes-made-simple
   if (!cols.some((c) => c.name === "slug")) db.exec("ALTER TABLE courses ADD COLUMN slug TEXT");
+  // The agent's decisions: what to study (from the diagnostic) and what to do next.
+  if (!cols.some((c) => c.name === "assessment")) db.exec("ALTER TABLE courses ADD COLUMN assessment TEXT");
+  if (!cols.some((c) => c.name === "next_activity")) db.exec("ALTER TABLE courses ADD COLUMN next_activity TEXT");
   for (const row of db.prepare("SELECT id, title FROM courses WHERE slug IS NULL").all() as { id: number; title: string }[]) {
     db.prepare("UPDATE courses SET slug = ? WHERE id = ?").run(uniqueSlug(db, row.title), row.id);
   }

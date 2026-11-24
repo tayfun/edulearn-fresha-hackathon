@@ -24,6 +24,8 @@ export default function QuizPage() {
   const [result, setResult] = useState<Result | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  // Agent step 8: once the quiz is graded, ask what should happen next.
+  const { data: agentNext } = useLoad<{ action: string; title: string; reason: string; lessonNumber: number | null }>(result && data ? `/api/courses/${data.quiz.course_id}/next` : null);
 
   if (error) return <ErrorNote message={error} onRetry={reload} />;
   if (!data) return <Loading label="Loading the quiz" />;
@@ -63,6 +65,18 @@ export default function QuizPage() {
               ? "Solid. Nothing here needs another look."
               : `Worth another look: ${weak.map((c) => c.name).join(", ")}. We've saved ${weak.length > 1 ? "these" : "this"} to your weak spots.`}
           </p>
+          {agentNext && agentNext.action !== "complete" && (
+            <Link
+              href={agentNext.action === "practice" ? `${courseHref}/weaknesses` : agentNext.action === "flashcards" ? `${courseHref}/flashcards` : `${courseHref}/${agentNext.lessonNumber}`}
+              className="group mx-auto mt-5 block max-w-md rounded-xl border border-brand/40 bg-brand-soft px-4 py-3 text-left transition hover:border-brand"
+            >
+              <span className="block text-[11px] font-semibold uppercase tracking-wide text-brand">Your agent recommends next</span>
+              <span className="block text-sm font-semibold text-ink">
+                {agentNext.title} <span aria-hidden className="inline-block transition-transform group-hover:translate-x-1">→</span>
+              </span>
+              <span className="block text-xs text-muted">{agentNext.reason}</span>
+            </Link>
+          )}
           <div className="mt-5 flex flex-wrap justify-center gap-2">
             {result.weakCount > 0 && (
               <Link href={`${courseHref}/weaknesses`} className={weak.length ? btn.primary : btn.secondary}>

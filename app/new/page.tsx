@@ -7,7 +7,15 @@ import { LENGTHS, LengthPreset, TONES } from "@/lib/logic";
 
 type Question = { question: string; options: string[] };
 
-const STAGES = ["Searching the web for the best material", "Designing your modules and lessons", "Picking the concepts to track", "Collecting resources for each module"];
+type Check = { id: number; questions: { prompt: string; options: string[]; level: string }[] };
+
+const STAGES = [
+  "Working out what you need to study",
+  "Searching the web for the best material",
+  "Designing your modules and lessons",
+  "Picking the concepts to track",
+  "Collecting resources for each module",
+];
 
 function Chip({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -36,6 +44,10 @@ function Wizard() {
   const [stage, setStage] = useState(0);
   const [error, setError] = useState("");
   const asked = useRef(false);
+  // Agent step 1: an optional diagnostic, fetched when the learner reaches the last step.
+  const [check, setCheck] = useState<Check | null>(null);
+  const [checkState, setCheckState] = useState<"idle" | "loading" | "failed">("idle");
+  const [checkAnswers, setCheckAnswers] = useState<number[]>([]);
 
   useEffect(() => {
     if (!topic) {
@@ -58,18 +70,31 @@ function Wizard() {
 
   if (!topic || questions === null) return <Loading label="Thinking about what to ask you" />;
 
-  const total = questions.length + 2;
+  const total = questions.length + 3;
   const isLast = step === total - 1;
   const toneValue = tone === "custom" ? customTone.trim() : tone;
   const canNext = step < questions.length ? !!answers[step]?.trim() : step === questions.length ? toneValue.length >= 2 : true;
 
-  async function generate() {
+  function loadCheck() {
+    setCheckState("loading");
+    const goal = questions!.map((q, i) => `${q.question} ${answers[i]}`).join(" | ");
+    api<Check>("/api/assess", { body: { topic, goal, tone: toneValue } }).then(
+      (c) => {
+        setCheck(c);
+        setCheckState("idle");
+      },
+      () => setCheckState("failed"),
+    );
+  }
+
+  async function generate(skipCheck = false) {
     setGenerating(true);
     setStage(0);
     setError("");
     try {
       const goal = questions!.map((q, i) => `${q.question} ${answers[i]}`).join(" | ");
-      const { slug } = await api<{ slug: string }>("/api/courses", { body: { topic, goal, priorKnowledge: prior, tone: toneValue, length } });
+      const assessment = check && !skipCheck ? { id: check.id, answers: check.questions.map((_, i) => checkAnswers[i] ?? -1) } : undefined;
+      const { slug } = await api<{ slug: string }>("/api/courses", { body: { topic, goal, priorKnowledge: prior, tone: toneValue, length, assessment } });
       router.push(`/courses/${slug}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not build the course");
@@ -165,6 +190,53 @@ function Wizard() {
               />
             </label>
           </div>
+        ) : step === questions.length + 2 ? (
+          <div>
+            <h2 className="font-display text-xl font-semibold">Quick check: what do you already know?</h2>
+            <p className="mt-1 text-sm text-muted">
+              Five questions, easy to hard. Your answers decide what the course skips and what it spends time on. Guessing hides gaps, so pick &quot;I don&apos;t know&quot; when you don&apos;t.
+            </p>
+            {checkState === "loading" && <Loading label="Writing your knowledge check" />}
+            {checkState === "failed" && (
+              <div className="mt-4">
+                <ErrorNote message="The knowledge check could not be written. You can retry or build the course without it." onRetry={loadCheck} />
+              </div>
+            )}
+            {check && (
+              <ol className="mt-5 space-y-6">
+                {check.questions.map((q, qi) => (
+                  <li key={qi}>
+                    <fieldset>
+                      <legend className="text-sm font-medium">
+                        {qi + 1}. {q.prompt}
+                      </legend>
+                      <div className="mt-2 grid gap-1.5">
+                        {[...q.options, "I don't know"].map((o, oi) => {
+                          const value = oi === q.options.length ? -1 : oi;
+                          const checked = checkAnswers[qi] === value;
+                          return (
+                            <label
+                              key={oi}
+                              className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2 text-sm transition ${checked ? "border-brand bg-brand-soft" : "border-line hover:border-brand"} ${value === -1 ? "text-muted" : ""}`}
+                            >
+                              <input
+                                type="radio"
+                                name={`check${qi}`}
+                                checked={checked}
+                                onChange={() => setCheckAnswers((a) => Object.assign([...a], { [qi]: value }))}
+                                className="mt-1 accent-[var(--color-brand)]"
+                              />
+                              <span>{o}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
         ) : (
           <fieldset>
             <legend className="font-display text-xl font-semibold">How long should the course be?</legend>
@@ -183,15 +255,30 @@ function Wizard() {
       </Card>
 
       <div className="mt-4">
-        <ErrorNote message={error} onRetry={generate} />
+        <ErrorNote message={error} onRetry={() => generate()} />
       </div>
       <div className="mt-4 flex justify-between">
         <button className={btn.ghost} onClick={() => (step === 0 ? router.push("/") : setStep(step - 1))}>
           ← Back
         </button>
-        <button className={btn.primary} disabled={!canNext} onClick={() => (isLast ? generate() : setStep(step + 1))}>
-          {isLast ? "Build my course" : "Continue"}
-        </button>
+        <span className="flex flex-wrap justify-end gap-2">
+          {isLast && (
+            <button className={btn.ghost} onClick={() => generate(true)}>
+              Skip the check
+            </button>
+          )}
+          <button
+            className={btn.primary}
+            disabled={isLast ? !check || checkAnswers.filter((a) => a !== undefined).length < check.questions.length : !canNext}
+            onClick={() => {
+              if (isLast) return void generate();
+              if (step === total - 2 && !check && checkState !== "loading") loadCheck();
+              setStep(step + 1);
+            }}
+          >
+            {isLast ? "Build my course" : "Continue"}
+          </button>
+        </span>
       </div>
     </div>
   );

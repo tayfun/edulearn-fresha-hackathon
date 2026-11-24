@@ -13,6 +13,7 @@ const Input = z.object({
   priorKnowledge: z.string().trim().max(1000).default(""),
   tone: z.string().trim().min(2).max(300),
   length: z.enum(Object.keys(LENGTHS) as [LengthPreset, ...LengthPreset[]]),
+  assessment: z.object({ id: z.number().int().positive(), answers: z.array(z.number().int().min(-1).max(3)).max(10) }).optional(),
 });
 
 export const POST = route(async (req) => createCourse(await body(req, Input)));
