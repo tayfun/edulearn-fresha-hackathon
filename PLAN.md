@@ -4,7 +4,7 @@ A web app where a learner types any topic, answers a few guiding questions, and
 gets a personalised curriculum with lessons, quizzes, weakness tracking,
 recommendations and flashcards. Progress is persisted in SQLite.
 
-Status: **plan only — no application code yet.** Open questions are at the bottom.
+Status: **built.** Decisions taken and deviations from the original plan are in section 8.
 
 ## 1. Learner journey
 
@@ -142,16 +142,31 @@ committed, logged, or sent to the client.
 - **Daily plan and streak** for long courses ("today: 20 minutes, 2 lessons").
 - **Export** flashcards to Anki / CSV.
 
-## 8. Open questions
+## 8. Decisions and what changed while building
 
-1. **Stack** — is Next.js + TypeScript fine, or do you prefer a Python backend
-   (FastAPI) with a separate frontend?
-2. **Users** — no login with a single local learner profile (simplest), a
-   name-only profile picker, or real accounts with email and password?
-3. **Deployment** — local/demo only, or does it need to be hosted? SQLite needs
-   a persistent disk, which rules out serverless hosts like Vercel.
-4. **Branch** — AGENTS.md says to commit to `main`. This session is restricted
-   to `claude/trusting-volta-q0nxtc` unless you explicitly allow `main`.
-5. **Improvements** — which of section 7, if any, should be in the first build?
-6. **Language** — English-only UI and content, or should the learner be able
-   to pick the course language?
+Answers to the open questions:
+
+- **Stack** — Next.js + TypeScript.
+- **Users** — no login; one local learner.
+- **Branch** — `main`.
+- **Extras in the first build** — tutor chat (with "explain this differently")
+  and daily plan + streak. Diagnostic pre-quiz and adaptive curriculum are not
+  built.
+
+Deviations from the sections above:
+
+- **No Drizzle** — plain `better-sqlite3` with the schema in `lib/db.ts`.
+- **No `learners` table** — there is a single local learner.
+- **Mastery lives on `concepts`** (`correct`, `incorrect`, `mastery`,
+  `last_seen_at`) instead of a separate `concept_mastery` table. Mastery is a
+  moving average: the first answer sets it, each later answer moves it halfway.
+  A concept is weak below 60%, so one miss is weak until two correct answers.
+- **Quiz kinds** — lesson quizzes and weak-spot practice quizzes. Module quizzes
+  are not built.
+- **Curriculum preview / regenerate with a change request** — not built; the
+  course page is the preview and a course can be deleted and rebuilt.
+- **Models** — `openai/gpt-oss-120b` for everything by default. A stronger
+  reasoning model (Kimi K3.1 Pro) wrote a slightly richer outline but took
+  ~3 minutes for a 2-month course against ~20 seconds, so it is an opt-in via
+  `LLM_MODEL_STRONG`.
+- **Added** — `tutor_messages` table; flashcard export is not built.
