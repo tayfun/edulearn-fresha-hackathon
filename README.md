@@ -41,8 +41,7 @@ persistent disk.
 
 Courses are addressed by name and lessons by their number within the course:
 `/courses/black-holes-made-simple` and `/courses/black-holes-made-simple/3`.
-Two courses with the same title get `-2`, `-3`, … appended. Older numeric
-links (`/courses/1`, `/lessons/17`) still work and forward to the new form.
+Two courses with the same title get `-2`, `-3`, … appended.
 
 ## Debug mode
 
