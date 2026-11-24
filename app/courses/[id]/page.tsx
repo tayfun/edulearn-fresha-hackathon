@@ -56,14 +56,14 @@ function useCountUp(target: number, ms = 1200) {
   return value;
 }
 
-function ProgressRing({ value }: { value: number }) {
+function ProgressRing({ value, small = false }: { value: number; small?: boolean }) {
   const shown = useCountUp(value);
   const r = 52;
   const full = 2 * Math.PI * r;
   return (
-    <div className="relative h-36 w-36 shrink-0" role="img" aria-label={`Course progress ${value}%`}>
+    <div className={`relative shrink-0 ${small ? "h-[4.5rem] w-[4.5rem]" : "h-40 w-40"}`} role="img" aria-label={`Course progress ${value}%`}>
       <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90">
-        <circle cx="64" cy="64" r={r} fill="rgb(6 47 41 / 0.55)" stroke="rgb(255 255 255 / 0.18)" strokeWidth="10" />
+        <circle cx="64" cy="64" r={r} fill="rgb(4 36 31 / 0.6)" stroke="rgb(255 255 255 / 0.2)" strokeWidth="10" />
         <circle
           cx="64"
           cy="64"
@@ -79,8 +79,8 @@ function ProgressRing({ value }: { value: number }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-        <span className="font-display text-4xl font-semibold leading-none tabular-nums">{shown}%</span>
-        <span className="mt-1 text-[11px] uppercase tracking-wider text-white/70">complete</span>
+        <span className={`font-display font-semibold leading-none tabular-nums ${small ? "text-lg" : "text-4xl"}`}>{shown}%</span>
+        {!small && <span className="mt-1 text-[11px] uppercase tracking-wider text-white/75">complete</span>}
       </div>
     </div>
   );
@@ -92,7 +92,9 @@ function Trail({ lessons, nextId }: { lessons: Lesson[]; nextId: number | null }
     <div className="relative mt-6">
       <div className="mb-2 flex justify-between text-[11px] uppercase tracking-wider text-white/70">
         <span>Start</span>
-        <span>Summit</span>
+        <span className="flex items-center gap-1 text-[#f6b84a]">
+          Summit <Icon name="flag" className="flag-wave h-3.5 w-3.5" />
+        </span>
       </div>
       <ol className="relative flex items-center justify-between">
         <span aria-hidden className="absolute inset-x-1 top-1/2 h-0.5 -translate-y-1/2 bg-white/25" />
@@ -121,17 +123,58 @@ function Trail({ lessons, nextId }: { lessons: Lesson[]; nextId: number | null }
   );
 }
 
-function Stat({ icon, label, value, tint, i, animate = "" }: { icon: "book" | "flame" | "target" | "cards"; label: string; value: React.ReactNode; tint: string; i: number; animate?: string }) {
+function QuizChip({ score }: { score: number }) {
+  const pct = Math.round(score * 100);
   return (
-    <div className="rise lift flex h-full items-center gap-3 rounded-2xl border border-line bg-card px-4 py-4" style={delay(i)}>
+    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${score >= 0.75 ? "bg-good-soft text-good" : "border border-line bg-paper text-muted"}`}>
+      {score >= 0.75 ? `quiz ${pct}%` : `quiz ${pct}% · retake`}
+    </span>
+  );
+}
+
+function Stat({
+  icon,
+  label,
+  value,
+  tint,
+  i,
+  animate = "",
+  href,
+}: {
+  icon: "book" | "flame" | "target" | "cards";
+  label: string;
+  value: React.ReactNode;
+  tint: string;
+  i: number;
+  animate?: string;
+  href?: string;
+}) {
+  const body = (
+    <>
       <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tint}`}>
         <Icon name={icon} className={`h-6 w-6 ${animate}`} />
       </span>
-      <span className="min-w-0">
+      <span className="min-w-0 flex-1">
         <span className="block font-display text-2xl font-semibold leading-tight tabular-nums">{value}</span>
-        <span className="block truncate text-xs text-muted">{label}</span>
+        <span className="block text-xs text-muted">{label}</span>
       </span>
-    </div>
+    </>
+  );
+  const box = "rise flex h-full items-center gap-3 rounded-2xl border border-line bg-card px-4 py-4";
+  if (!href) {
+    return (
+      <div className={box} style={delay(i)}>
+        {body}
+      </div>
+    );
+  }
+  return (
+    <Link href={href} className={`${box} lift group hover:border-brand`} style={delay(i)}>
+      {body}
+      <span aria-hidden className="text-muted transition group-hover:translate-x-1 group-hover:text-brand">
+        →
+      </span>
+    </Link>
   );
 }
 
@@ -154,7 +197,7 @@ export default function CoursePage() {
 
   return (
     <div className="space-y-8">
-      <section className="rise relative overflow-hidden rounded-3xl text-white shadow-lg shadow-brand-dark/20">
+      <section className="rise-solid relative overflow-hidden rounded-3xl text-white shadow-lg shadow-brand-dark/20">
         <HeroArt />
         <div className="relative p-6 sm:p-9">
           <nav className="mb-5 flex flex-wrap items-center gap-1.5 text-sm text-white/75" aria-label="Breadcrumb">
@@ -165,7 +208,7 @@ export default function CoursePage() {
             <span className="text-white">{course.title}</span>
           </nav>
           <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="max-w-xl">
+            <div className="sm:max-w-[62%]">
               <h1 className="text-3xl font-semibold leading-tight text-white sm:text-[2.6rem]">{course.title}</h1>
               {course.description && <p className="mt-3 text-white/85">{course.description}</p>}
               <div className="mt-4 flex flex-wrap gap-2 text-xs">
@@ -189,15 +232,24 @@ export default function CoursePage() {
                 ) : (
                   <span className="rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold backdrop-blur-sm">You reached the summit. Course complete.</span>
                 )}
-                {nextLesson && <span className="min-w-0 max-w-[16rem] truncate text-sm text-white/80">Up next: {nextLesson.title}</span>}
+                <span className="ml-auto sm:hidden">
+                  <ProgressRing small value={data.progress} />
+                </span>
               </div>
+              {nextLesson && (
+                <p className="mt-3 text-sm text-white/85">
+                  <span className="text-white/65">Up next</span> · {nextLesson.title.replace(/^Lesson \d+:\s*/i, "")}
+                </p>
+              )}
             </div>
-            <ProgressRing value={data.progress} />
+            <div className="hidden sm:block">
+              <ProgressRing value={data.progress} />
+            </div>
           </div>
           <Trail lessons={allLessons} nextId={data.nextLessonId} />
           <p className="mt-3 text-xs text-white/75">
             {data.lessonsDone} of {data.lessonsTotal} lessons complete
-            {plan && !done && ` · day ${Math.min(plan.dayNumber, plan.totalDays)} of ${plan.totalDays} · on pace would be ${plan.expectedPercent}%`}
+            {plan && !done && ` · day ${Math.min(plan.dayNumber, plan.totalDays)} of ${plan.totalDays} · target pace ${plan.expectedPercent}%`}
           </p>
         </div>
       </section>
@@ -205,12 +257,15 @@ export default function CoursePage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat i={1} icon="book" tint="bg-brand-soft text-brand-dark" label="lessons done" value={`${data.lessonsDone}/${data.lessonsTotal}`} />
         <Stat i={2} icon="flame" tint="bg-warn-soft text-warn" label="day streak" value={data.streak} animate={data.streak > 0 ? "flame" : ""} />
-        <Link href={`/courses/${id}/weaknesses`} className="block rounded-2xl">
-          <Stat i={3} icon="target" tint={data.weakCount ? "bg-bad-soft text-bad" : "bg-good-soft text-good"} label="weak spots →" value={data.weakCount} />
-        </Link>
-        <Link href={`/courses/${id}/flashcards`} className="block rounded-2xl">
-          <Stat i={4} icon="cards" tint="bg-[#ece8fb] text-[#5b3fc4]" label={`of ${data.totalCards} cards due →`} value={data.dueCards} />
-        </Link>
+        <Stat
+          i={3}
+          icon="target"
+          href={`/courses/${id}/weaknesses`}
+          tint={data.weakCount ? "bg-bad-soft text-bad" : "bg-good-soft text-good"}
+          label={data.weakCount === 1 ? "weak spot" : "weak spots"}
+          value={data.weakCount}
+        />
+        <Stat i={4} icon="cards" href={`/courses/${id}/flashcards`} tint="bg-[#f1eadc] text-ink" label={data.totalCards ? `of ${data.totalCards} cards due` : "flashcards"} value={data.dueCards} />
       </div>
 
       {plan && !done && (
@@ -221,7 +276,7 @@ export default function CoursePage() {
               Today&apos;s plan
             </h2>
             <span className="text-sm text-muted">
-              {plan.minutesToday} of {plan.dailyMinutes} min done today
+              {plan.minutesToday} min done today · target {plan.dailyMinutes} min
             </span>
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
@@ -263,7 +318,7 @@ export default function CoursePage() {
             <Card key={m.id} className="rise">
               <div className="flex items-start gap-4">
                 <span
-                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl font-display text-lg font-semibold ${modulePct === 100 ? "bg-good text-white" : "bg-brand-soft text-brand-dark"}`}
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl font-display text-lg font-semibold ${modulePct === 100 ? "bg-brand text-white" : "bg-brand-soft text-brand-dark"}`}
                 >
                   {modulePct === 100 ? "✓" : mi + 1}
                 </span>
@@ -281,31 +336,42 @@ export default function CoursePage() {
                 </div>
               </div>
               <ol className="mt-4 divide-y divide-line border-y border-line">
-                {m.lessons.map((l) => (
-                  <li key={l.id}>
-                    <Link href={`/lessons/${l.id}`} className="group flex items-center gap-3 rounded-lg px-2 py-3 transition hover:bg-brand-soft/50">
-                      <span
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs ${l.completed_at ? "border-good bg-good text-white" : l.id === data.nextLessonId ? "border-brand text-brand" : "border-line text-muted"}`}
-                        aria-label={l.completed_at ? "Completed" : "Not completed"}
+                {m.lessons.map((l) => {
+                  const isNext = l.id === data.nextLessonId;
+                  return (
+                    <li key={l.id}>
+                      <Link
+                        href={`/lessons/${l.id}`}
+                        className={`group flex items-start gap-3 px-2 py-3 transition sm:items-center ${isNext ? "bg-[#fdf4df] hover:bg-[#fbecc8]" : "hover:bg-brand-soft/60"}`}
                       >
-                        {l.completed_at ? "✓" : ""}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-medium">{l.title}</span>
-                        {l.objectives[0] && <span className="block truncate text-xs text-muted">{l.objectives[0]}</span>}
-                      </span>
-                      {l.bestScore !== null && (
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${l.bestScore >= 0.75 ? "bg-good-soft text-good" : "bg-warn-soft text-warn"}`}>
-                          quiz {Math.round(l.bestScore * 100)}%
+                        <span
+                          className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs sm:mt-0 ${l.completed_at ? "border-brand bg-brand text-white" : isNext ? "border-2 border-[#e09a1f] bg-white" : "border-line bg-white text-muted"}`}
+                          aria-label={l.completed_at ? "Completed" : "Not completed"}
+                        >
+                          {l.completed_at ? "✓" : ""}
                         </span>
-                      )}
-                      <span className="shrink-0 text-xs text-muted">{l.est_minutes} min</span>
-                      <span aria-hidden className="shrink-0 text-muted opacity-0 transition group-hover:translate-x-1 group-hover:opacity-100">
-                        →
-                      </span>
-                    </Link>
-                  </li>
-                ))}
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-medium">
+                            {l.title}
+                            {isNext && <span className="ml-2 rounded-full bg-[#f6b84a] px-2 py-0.5 align-middle text-[11px] font-semibold uppercase tracking-wide text-[#3a2500]">Next</span>}
+                          </span>
+                          {l.objectives[0] && <span className="line-clamp-2 text-xs text-muted sm:line-clamp-1">{l.objectives[0]}</span>}
+                          <span className="mt-1 flex items-center gap-2 text-xs text-muted sm:hidden">
+                            {l.est_minutes} min
+                            {l.bestScore !== null && <QuizChip score={l.bestScore} />}
+                          </span>
+                        </span>
+                        <span className="hidden shrink-0 items-center gap-3 text-xs text-muted sm:flex">
+                          {l.bestScore !== null && <QuizChip score={l.bestScore} />}
+                          {l.est_minutes} min
+                        </span>
+                        <span aria-hidden className={`hidden shrink-0 transition group-hover:translate-x-1 sm:block ${isNext ? "text-[#b97a10]" : "text-muted opacity-0 group-hover:opacity-100"}`}>
+                          →
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
               </ol>
               {m.resources.length > 0 && (
                 <details className="mt-3">
@@ -323,7 +389,20 @@ export default function CoursePage() {
       {data.sessions.length > 0 && (
         <section>
           <h2 className="mb-3 text-2xl font-semibold">Study sessions</h2>
-          <Card className="overflow-x-auto p-0">
+          <ul className="space-y-3 sm:hidden">
+            {data.sessions.map((s) => (
+              <li key={s.id}>
+                <Card className="p-4">
+                  <div className="font-medium">{new Date(s.started_at.replace(" ", "T") + "Z").toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+                  <div className="mt-1 text-sm text-muted">
+                    {s.lessons_done} lesson{s.lessons_done === 1 ? "" : "s"} · {s.quizzes_done} quiz{s.quizzes_done === 1 ? "" : "zes"} · {s.cards_reviewed} card{s.cards_reviewed === 1 ? "" : "s"}
+                  </div>
+                  <div className="mt-2 text-xs text-muted">Weak spots at the end: {s.weaknesses.length ? s.weaknesses.map((w) => w.name).join(", ") : "none"}</div>
+                </Card>
+              </li>
+            ))}
+          </ul>
+          <Card className="hidden overflow-x-auto p-0 sm:block">
             <table className="w-full min-w-[32rem] text-sm">
               <thead className="text-left text-xs text-muted">
                 <tr className="border-b border-line">

@@ -75,8 +75,14 @@ button:not(:disabled), [role="button"] {
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 .rise { animation: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 70ms); }
 
-@keyframes twinkle { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
-.twinkle { animation: twinkle 3.2s ease-in-out infinite; animation-delay: calc(var(--i, 0) * -0.7s); }
+@keyframes rise-solid { from { transform: translateY(14px); } to { transform: none; } }
+.rise-solid { animation: rise-solid 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
+@keyframes sway { 0%, 100% { transform: translateX(-14px); } 50% { transform: translateX(14px); } }
+.sway { animation: sway 18s ease-in-out infinite; }
+
+@keyframes twinkle { 0%, 100% { opacity: 0.15; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.5); } }
+.twinkle { transform-origin: center; transform-box: fill-box; animation: twinkle 2.6s ease-in-out infinite; animation-delay: calc(var(--i, 0) * -0.7s); }
 
 @keyframes drift { from { transform: translateX(-12%); } to { transform: translateX(112%); } }
 .drift { animation: drift linear infinite; animation-duration: var(--d, 80s); animation-delay: var(--o, 0s); }
@@ -99,17 +105,17 @@ button:not(:disabled), [role="button"] {
 @keyframes flame { 0%, 100% { transform: rotate(-4deg) scale(1); } 50% { transform: rotate(4deg) scale(1.08); } }
 .flame { transform-origin: 50% 90%; animation: flame 1.6s ease-in-out infinite; }
 
-@keyframes flag-wave { 0%, 100% { transform: skewY(0deg); } 50% { transform: skewY(-8deg); } }
-.flag-wave { transform-origin: left center; transform-box: fill-box; animation: flag-wave 2.4s ease-in-out infinite; }
+@keyframes flag-wave { 0%, 100% { transform: skewY(0deg); } 50% { transform: skewY(-16deg) scaleX(0.9); } }
+.flag-wave { transform-origin: left center; transform-box: fill-box; animation: flag-wave 1.6s ease-in-out infinite; }
 
 @keyframes fly { from { offset-distance: 0%; } to { offset-distance: 100%; } }
-.fly { offset-rotate: auto; animation: fly 26s linear infinite; }
+.fly { offset-rotate: auto; animation: fly 18s linear infinite; }
 
 .lift { transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; }
 .lift:hover { transform: translateY(-3px); box-shadow: 0 10px 24px -12px rgb(31 27 22 / 0.25); }
 
 @media (prefers-reduced-motion: reduce) {
-  .rise, .twinkle, .drift, .bob, .sun-glow, .ring-in, .bar-in, .ping-soft, .flame, .flag-wave, .fly { animation: none; }
+  .rise, .rise-solid, .sway, .twinkle, .drift, .bob, .sun-glow, .ring-in, .bar-in, .ping-soft, .flame, .flag-wave, .fly { animation: none; }
   .fly { display: none; }
   .lift:hover { transform: none; }
 }
