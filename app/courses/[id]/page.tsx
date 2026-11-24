@@ -3,16 +3,31 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Icon } from "@/components/art";
+import { HeaderArt, Icon } from "@/components/art";
 import { Card, ErrorNote, Loading, ResourceList, api, useLoad } from "@/components/ui";
 
 type Lesson = { id: number; title: string; est_minutes: number; completed_at: string | null; objectives: string[]; bestScore: number | null };
 type Detail = {
   course: { id: number; title: string; description: string; topic: string; tone: string; lengthLabel: string; image_svg: string | null };
-  progress: number; lessonsDone: number; lessonsTotal: number; minutesTotal: number; weakCount: number; dueCards: number; totalCards: number;
-  streak: number; nextLessonId: number | null;
+  progress: number;
+  lessonsDone: number;
+  lessonsTotal: number;
+  minutesTotal: number;
+  weakCount: number;
+  dueCards: number;
+  totalCards: number;
+  streak: number;
+  nextLessonId: number | null;
   activity: { date: string; count: number; future: boolean }[][];
-  plan: null | { dailyMinutes: number; dayNumber: number; totalDays: number; minutesToday: number; targetMet: boolean; expectedPercent: number; upNext: { id: number; title: string; est_minutes: number }[] };
+  plan: null | {
+    dailyMinutes: number;
+    dayNumber: number;
+    totalDays: number;
+    minutesToday: number;
+    targetMet: boolean;
+    expectedPercent: number;
+    upNext: { id: number; title: string; est_minutes: number }[];
+  };
   modules: { id: number; title: string; summary: string; lessons: Lesson[]; resources: { id: number; title: string; url: string }[] }[];
   sessions: { id: number; started_at: string; ended_at: string; lessons_done: number; quizzes_done: number; cards_reviewed: number; weaknesses: { name: string }[] }[];
 };
@@ -58,7 +73,7 @@ function ProgressRing({ value }: { value: number }) {
   const r = 52;
   const full = 2 * Math.PI * r;
   return (
-    <div className="relative mx-auto h-44 w-44" role="img" aria-label={`Course progress ${value}%`}>
+    <div className="relative mx-auto h-48 w-48 sm:h-52 sm:w-52" role="img" aria-label={`Course progress ${value}%`}>
       <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90 overflow-visible">
         <defs>
           <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
@@ -66,12 +81,12 @@ function ProgressRing({ value }: { value: number }) {
             <stop offset="1" stopColor="#0ea5c6" />
           </linearGradient>
         </defs>
-        <circle cx="64" cy="64" r={r} fill="none" stroke="#12283d" strokeWidth="9" />
-        <circle cx="64" cy="64" r={r} fill="none" stroke="url(#ring)" strokeWidth="9" strokeLinecap="round" strokeDasharray={full} strokeDashoffset={full * (1 - shown / 100)} className="glow-line" />
+        <circle cx="64" cy="64" r={r} fill="none" stroke="#12283d" strokeWidth="10" />
+        <circle cx="64" cy="64" r={r} fill="none" stroke="url(#ring)" strokeWidth="10" strokeLinecap="round" strokeDasharray={full} strokeDashoffset={full * (1 - shown / 100)} className="glow-line" />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-xs text-muted">Progress</span>
-        <span className="text-5xl font-bold leading-none tracking-tight tabular-nums text-white">
+        <span className="text-xs text-muted">Complete</span>
+        <span className="text-6xl font-bold leading-none tracking-tight tabular-nums text-white">
           {shown}
           <span className="text-2xl text-brand">%</span>
         </span>
@@ -87,7 +102,7 @@ function Heatmap({ weeks }: { weeks: Detail["activity"] }) {
   return (
     <div>
       <div className="flex gap-2">
-        <div className="grid grid-rows-7 gap-1 text-[10px] leading-none text-muted" aria-hidden>
+        <div className="grid grid-rows-7 gap-1 text-[11px] leading-none text-muted" aria-hidden>
           {["Mon", "", "Wed", "", "Fri", "", "Sun"].map((d, i) => (
             <span key={i} className="flex h-full items-center">
               {d}
@@ -107,7 +122,7 @@ function Heatmap({ weeks }: { weeks: Detail["activity"] }) {
           )}
         </div>
       </div>
-      <div className="mt-3 flex items-center justify-between text-[10px] text-muted">
+      <div className="mt-3 flex items-center justify-between text-xs text-muted">
         <span>12 weeks</span>
         <span className="flex items-center gap-1" aria-hidden>
           Less
@@ -137,18 +152,28 @@ function CourseImage({ courseId, initial }: { courseId: number; initial: string 
   }, [courseId, initial]);
 
   return (
-    <div className="relative mt-3 h-40 overflow-hidden rounded-xl bg-[radial-gradient(ellipse_at_50%_35%,rgb(34_211_238/0.16),transparent_65%)]">
-      <div aria-hidden className="grid-floor absolute inset-x-[-20%] bottom-0 h-24" />
+    <div className="relative mt-3 h-44 overflow-hidden">
+      <div aria-hidden className="absolute inset-0 bg-[radial-gradient(closest-side,rgb(34_211_238/0.2),transparent)]" />
+      <div aria-hidden className="grid-floor absolute inset-x-[-30%] bottom-0 h-40" />
       {svg ? (
         // The drawing is model output: an <img> renders it without running anything inside it.
         // eslint-disable-next-line @next/next/no-img-element
-        <img alt="" src={`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`} className="fade-in glow-line relative mx-auto h-full w-auto" />
+        <img alt="" src={`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`} className="fade-in glow-line relative mx-auto h-[82%] w-auto" />
       ) : (
-        <svg aria-hidden viewBox="0 0 400 240" className="glow-line relative mx-auto h-full">
-          <path d="M40 150 C90 40 130 40 180 120 S270 220 320 90 L360 60" fill="none" stroke="#22d3ee" strokeWidth="3" strokeLinecap="round" pathLength={1} strokeDasharray="1" style={{ animation: "draw 2.4s ease-in-out infinite alternate" }} />
+        <svg aria-hidden viewBox="0 0 400 240" className="glow-line relative mx-auto h-[82%]">
+          <path
+            d="M40 150 C90 40 130 40 180 120 S270 220 320 90 L360 60"
+            fill="none"
+            stroke="#22d3ee"
+            strokeWidth="3"
+            strokeLinecap="round"
+            pathLength={1}
+            strokeDasharray="1"
+            style={{ animation: "draw 2.4s ease-in-out infinite alternate" }}
+          />
         </svg>
       )}
-      {state === "drawing" && <span className="absolute bottom-2 right-3 text-[10px] text-muted">drawing illustration…</span>}
+      {state === "drawing" && <span className="absolute bottom-2 right-3 text-xs text-muted">drawing illustration…</span>}
     </div>
   );
 }
@@ -196,10 +221,30 @@ function Path({ lessons, nextId }: { lessons: Lesson[]; nextId: number | null })
 
 function QuizChip({ score }: { score: number }) {
   const pct = Math.round(score * 100);
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${score >= 0.75 ? "bg-good-soft text-good" : "bg-warn-soft text-warn"}`}>{score >= 0.75 ? `quiz ${pct}%` : `quiz ${pct}% · retake`}</span>;
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${score >= 0.75 ? "bg-good-soft text-good" : "bg-warn-soft text-warn"}`}>
+      {score >= 0.75 ? `quiz ${pct}%` : `quiz ${pct}% · retake`}
+    </span>
+  );
 }
 
-function Stat({ icon, label, value, tint, i, href, animate = "" }: { icon: "book" | "flame" | "target" | "cards"; label: string; value: React.ReactNode; tint: string; i: number; href: string; animate?: string }) {
+function Stat({
+  icon,
+  label,
+  value,
+  tint,
+  i,
+  href,
+  animate = "",
+}: {
+  icon: "book" | "clock" | "target" | "cards";
+  label: string;
+  value: React.ReactNode;
+  tint: string;
+  i: number;
+  href: string;
+  animate?: string;
+}) {
   return (
     <Link href={href} className="panel rise lift group flex items-center gap-3 px-4 py-4" style={delay(i)}>
       <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tint}`}>
@@ -226,6 +271,9 @@ export default function CoursePage() {
   const done = data.progress === 100;
   const allLessons = data.modules.flatMap((m) => m.lessons);
   const nextLesson = allLessons.find((l) => l.id === data.nextLessonId);
+  const activeDays = data.activity.flat().filter((d) => d.count > 0).length;
+  const scores = allLessons.map((l) => l.bestScore).filter((x): x is number => x !== null);
+  const avgScore = scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 100) : null;
   const minutesDone = allLessons.filter((l) => l.completed_at).reduce((s, l) => s + l.est_minutes, 0);
 
   async function remove() {
@@ -236,21 +284,22 @@ export default function CoursePage() {
 
   return (
     <div className="space-y-6">
-      <header className="rise">
-        <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted hover:text-brand">
-          <span aria-hidden>‹</span> My courses
-        </Link>
-        <h1 className="mt-3 max-w-3xl text-3xl font-bold leading-tight text-white sm:text-4xl">
-          {data.lessonsDone === 0 ? "Ready to start: " : done ? "Completed: " : "Welcome back to "}
-          <span className="glow-text text-brand">{course.title}</span>
-        </h1>
-        {course.description && <p className="mt-2 max-w-2xl text-muted">{course.description}</p>}
-        <div className="mt-4 flex flex-wrap gap-2 text-xs">
-          {[course.lengthLabel, course.tone, `${data.lessonsTotal} lesson${data.lessonsTotal === 1 ? "" : "s"}`, fmtMinutes(data.minutesTotal)].map((t) => (
-            <span key={t} className="rounded-full border border-line bg-card px-2.5 py-1 text-muted">
-              {t}
-            </span>
-          ))}
+      <header className="rise relative">
+        <HeaderArt />
+        <div className="relative">
+          <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted hover:text-brand">
+            <span aria-hidden>‹</span> My courses
+          </Link>
+          <p className="mt-3 text-sm font-medium uppercase tracking-widest text-brand">{data.lessonsDone === 0 ? "Ready to start" : done ? "Course complete" : "Welcome back"}</p>
+          <h1 className="mt-1 max-w-2xl text-2xl font-bold leading-tight text-white sm:text-4xl lg:max-w-[58%]">{course.title}</h1>
+          {course.description && <p className="mt-2 max-w-xl text-muted lg:max-w-[55%]">{course.description}</p>}
+          <div className="mt-4 flex flex-wrap gap-2 text-xs">
+            {[course.lengthLabel, course.tone, `${data.lessonsTotal} lesson${data.lessonsTotal === 1 ? "" : "s"}`, fmtMinutes(data.minutesTotal)].map((t) => (
+              <span key={t} className="rounded-full border border-line bg-card px-2.5 py-1 text-muted">
+                {t}
+              </span>
+            ))}
+          </div>
         </div>
       </header>
 
@@ -263,49 +312,64 @@ export default function CoursePage() {
             {data.lessonsDone} of {data.lessonsTotal} lessons <span className="text-muted">·</span> <span className="text-brand">{fmtMinutes(minutesDone)}</span> studied
           </p>
           <p className="mt-1 text-center text-xs text-muted">
-            {done ? "Every lesson complete" : plan ? `Day ${Math.min(plan.dayNumber, plan.totalDays)} of ${plan.totalDays} · target pace ${plan.expectedPercent}%` : `${fmtMinutes(data.minutesTotal - minutesDone)} to go`}
+            {done
+              ? "Every lesson complete"
+              : plan
+                ? `Day ${Math.min(plan.dayNumber, plan.totalDays)} of ${plan.totalDays} · target pace ${plan.expectedPercent}%`
+                : `${fmtMinutes(data.minutesTotal - minutesDone)} to go`}
           </p>
         </Panel>
 
         <Panel i={2} icon="flame" title="Study streak">
-          <p className="mt-3 text-2xl font-bold text-white">
-            <span className="glow-text text-brand">{data.streak}</span> day streak
-          </p>
-          <p className="mb-4 text-sm text-muted">{data.streak > 1 ? "Keep it up!" : data.streak === 1 ? "A streak starts with one day." : "Study today to start a streak."}</p>
-          <div className="my-auto">
+          <div className="mt-3 flex items-end gap-3">
+            <span className="glow-text text-6xl font-bold leading-none tabular-nums text-brand">{data.streak}</span>
+            <span className="pb-1">
+              <span className="block text-lg font-bold leading-tight text-white">day streak</span>
+              <span className="block text-sm text-muted">{data.streak > 1 ? "Keep it up!" : data.streak === 1 ? "It starts with one day." : "Study today to start one."}</span>
+            </span>
+          </div>
+          <div className="my-auto py-5">
             <Heatmap weeks={data.activity} />
           </div>
+          <p className="text-center text-xs text-muted">
+            Active on <span className="font-semibold text-ink">{activeDays}</span> day{activeDays === 1 ? "" : "s"} in the last 12 weeks
+          </p>
         </Panel>
 
-        <Panel i={3} icon="book" title={nextLesson ? "Next up" : "Course complete"} className="md:col-span-2 lg:col-span-1">
-          <CourseImage courseId={course.id} initial={course.image_svg} />
-          <div className="mt-4 flex flex-1 flex-col">
-            {nextLesson ? (
-              <>
-                <p className="text-xs text-muted">
-                  Lesson {allLessons.indexOf(nextLesson) + 1} of {data.lessonsTotal} · {nextLesson.est_minutes} min
-                </p>
-                <p className="mt-0.5 text-xl font-bold leading-snug text-white">{bare(nextLesson.title)}</p>
-                {nextLesson.objectives[0] && <p className="mb-4 mt-1 line-clamp-2 text-sm text-muted">{nextLesson.objectives[0]}</p>}
-                <Link
-                  href={`/lessons/${nextLesson.id}`}
-                  className="glow-btn group mt-auto flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#22d3ee] to-[#5eead4] px-5 py-3 text-sm font-bold text-on-brand transition hover:brightness-110"
-                >
-                  {data.lessonsDone === 0 ? "Start" : "Continue"}
-                  <span aria-hidden className="transition-transform group-hover:translate-x-1">
-                    →
-                  </span>
-                </Link>
-              </>
-            ) : (
-              <>
-                <p className="text-xl font-bold text-white">You finished every lesson.</p>
-                <p className="mt-1 text-sm text-muted">{data.weakCount ? "A few weak spots are left to polish." : "Nothing left to polish. Nicely done."}</p>
-                <Link href={`/courses/${id}/weaknesses`} className="mt-auto flex items-center justify-center rounded-xl border border-brand/40 px-5 py-3 text-sm font-semibold text-brand hover:bg-brand-soft">
-                  Review weak spots
-                </Link>
-              </>
-            )}
+        <Panel i={3} icon="book" title={nextLesson ? "Next up" : "Course complete"} className="order-first md:order-none md:col-span-2 lg:col-span-1">
+          <div className="flex flex-1 flex-col md:max-lg:grid md:max-lg:grid-cols-2 md:max-lg:items-center md:max-lg:gap-6">
+            <CourseImage courseId={course.id} initial={course.image_svg} />
+            <div className="mt-4 flex flex-1 flex-col md:max-lg:mt-3 md:max-lg:self-stretch">
+              {nextLesson ? (
+                <>
+                  <p className="text-xs text-muted">
+                    Lesson {allLessons.indexOf(nextLesson) + 1} of {data.lessonsTotal} · {nextLesson.est_minutes} min
+                  </p>
+                  <p className="mt-0.5 text-xl font-bold leading-snug text-white">{bare(nextLesson.title)}</p>
+                  {nextLesson.objectives[0] && <p className="mb-4 mt-1 line-clamp-2 text-sm text-muted">{nextLesson.objectives[0]}</p>}
+                  <Link
+                    href={`/lessons/${nextLesson.id}`}
+                    className="glow-btn group mt-auto flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#22d3ee] to-[#5eead4] px-5 py-3 text-sm font-bold text-on-brand transition hover:brightness-110"
+                  >
+                    {data.lessonsDone === 0 ? "Start" : "Continue"}
+                    <span aria-hidden className="transition-transform group-hover:translate-x-1">
+                      →
+                    </span>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <p className="text-xl font-bold text-white">You finished every lesson.</p>
+                  <p className="mt-1 text-sm text-muted">{data.weakCount ? "A few weak spots are left to polish." : "Nothing left to polish. Nicely done."}</p>
+                  <Link
+                    href={`/courses/${id}/weaknesses`}
+                    className="mt-auto flex items-center justify-center rounded-xl border border-brand/40 px-5 py-3 text-sm font-semibold text-brand hover:bg-brand-soft"
+                  >
+                    Review weak spots
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
         </Panel>
       </div>
@@ -316,22 +380,29 @@ export default function CoursePage() {
             <Icon name="flag" className="h-[18px] w-[18px] text-brand" />
             Your path
           </h2>
-          <span className="text-sm font-semibold tabular-nums text-brand">{data.progress}%</span>
+          <span className="text-sm text-muted">{done ? "All lessons complete" : `${data.lessonsTotal - data.lessonsDone} lesson${data.lessonsTotal - data.lessonsDone === 1 ? "" : "s"} to go`}</span>
         </div>
         <div className="mt-4">
           <Path lessons={allLessons} nextId={data.nextLessonId} />
         </div>
-        <div className="mt-1 flex justify-between text-[11px] uppercase tracking-wider text-muted">
+        <div className="mx-2 mt-1 flex justify-between text-xs uppercase tracking-wider text-muted">
           <span>Start</span>
           <span>Finish</span>
         </div>
       </section>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat i={5} icon="book" href="#curriculum" tint="bg-brand-soft text-brand" label="lessons done" value={`${data.lessonsDone}/${data.lessonsTotal}`} />
-        <Stat i={6} icon="flame" href="#sessions" tint="bg-warn-soft text-warn" label="day streak" value={data.streak} animate={data.streak > 0 ? "flame" : ""} />
-        <Stat i={7} icon="target" href={`/courses/${id}/weaknesses`} tint={data.weakCount ? "bg-bad-soft text-bad" : "bg-good-soft text-good"} label={data.weakCount === 1 ? "weak spot" : "weak spots"} value={data.weakCount} />
-        <Stat i={8} icon="cards" href={`/courses/${id}/flashcards`} tint="bg-[#1d1a3a] text-[#a5b4fc]" label={data.dueCards === 1 ? "card due" : "cards due"} value={data.dueCards} />
+        <Stat i={5} icon="clock" href="#curriculum" tint="bg-brand-soft text-brand" label={done ? "all done" : "left to study"} value={done ? "0 min" : fmtMinutes(data.minutesTotal - minutesDone)} />
+        <Stat i={6} icon="book" href="#curriculum" tint="bg-brand-soft text-brand" label="average quiz score" value={avgScore === null ? "–" : `${avgScore}%`} />
+        <Stat
+          i={7}
+          icon="target"
+          href={`/courses/${id}/weaknesses`}
+          tint={data.weakCount ? "bg-bad-soft text-bad" : "bg-brand-soft text-brand"}
+          label={data.weakCount === 1 ? "weak spot" : "weak spots"}
+          value={data.weakCount}
+        />
+        <Stat i={8} icon="cards" href={`/courses/${id}/flashcards`} tint="bg-brand-soft text-brand" label={data.dueCards === 1 ? "card due" : "cards due"} value={data.dueCards} />
       </div>
 
       {plan && !done && (
@@ -346,13 +417,10 @@ export default function CoursePage() {
             </span>
           </div>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#12283d]">
-            <div
-              className={`bar-in h-full rounded-full ${plan.targetMet ? "bg-good" : "bg-brand"}`}
-              style={{ width: `${Math.min(100, Math.round((plan.minutesToday / plan.dailyMinutes) * 100))}%` }}
-            />
+            <div className="bar-in glow-line h-full rounded-full bg-brand" style={{ width: `${Math.min(100, Math.round((plan.minutesToday / plan.dailyMinutes) * 100))}%` }} />
           </div>
           {plan.targetMet ? (
-            <p className="mt-3 text-sm font-medium text-good">✓ Target met. Come back tomorrow to keep your streak, or keep going.</p>
+            <p className="mt-3 text-sm font-medium text-brand">✓ Target met. Come back tomorrow to keep your streak, or keep going.</p>
           ) : (
             <ul className="mt-3 space-y-2">
               {plan.upNext.map((l) => (
@@ -365,7 +433,10 @@ export default function CoursePage() {
               ))}
               {data.dueCards > 0 && (
                 <li>
-                  <Link href={`/courses/${id}/flashcards`} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-paper/60 px-4 py-2.5 text-sm transition hover:border-brand">
+                  <Link
+                    href={`/courses/${id}/flashcards`}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-line bg-paper/60 px-4 py-2.5 text-sm transition hover:border-brand"
+                  >
                     <span>
                       Review {data.dueCards} flashcard{data.dueCards > 1 ? "s" : ""}
                     </span>
@@ -399,11 +470,9 @@ export default function CoursePage() {
                     </span>
                   </div>
                   {m.summary && <p className="mt-1 text-sm text-muted">{m.summary}</p>}
-                  {modulePct > 0 && (
-                    <div className="mt-3 h-1 overflow-hidden rounded-full bg-[#12283d]">
-                      <div className="bar-in h-full rounded-full bg-brand" style={{ width: `${modulePct}%` }} />
-                    </div>
-                  )}
+                  <div className="mt-3 h-1 overflow-hidden rounded-full bg-[#12283d]">
+                    <div className="bar-in h-full rounded-full bg-brand" style={{ width: `${modulePct}%` }} />
+                  </div>
                 </div>
               </div>
               <ol className="mt-4 divide-y divide-line border-y border-line">
@@ -411,7 +480,10 @@ export default function CoursePage() {
                   const isNext = l.id === data.nextLessonId;
                   return (
                     <li key={l.id}>
-                      <Link href={`/lessons/${l.id}`} className={`group flex items-start gap-3 px-2 py-3 transition sm:items-center ${isNext ? "bg-brand-soft/70 hover:bg-brand-soft" : "hover:bg-white/[0.03]"}`}>
+                      <Link
+                        href={`/lessons/${l.id}`}
+                        className={`group flex items-start gap-3 px-2 py-3 transition sm:items-center ${isNext ? "bg-brand-soft/70 hover:bg-brand-soft" : "hover:bg-white/[0.03]"}`}
+                      >
                         <span
                           className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold sm:mt-0 ${
                             l.completed_at ? "border-brand bg-brand text-on-brand" : isNext ? "border-2 border-brand shadow-[0_0_10px_rgb(34_211_238/0.7)]" : "border-[#2c4a66]"
@@ -464,11 +536,13 @@ export default function CoursePage() {
       {data.sessions.length > 0 && (
         <section id="sessions" className="scroll-mt-20">
           <h2 className="mb-3 text-2xl font-bold text-white">Study sessions</h2>
-          <ul className="grid gap-3 sm:grid-cols-2">
+          <ul className={`grid gap-3 ${data.sessions.length > 1 ? "sm:grid-cols-2" : ""}`}>
             {data.sessions.map((s) => (
               <li key={s.id}>
                 <Card className="h-full p-4">
-                  <div className="font-medium text-ink">{new Date(s.started_at.replace(" ", "T") + "Z").toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+                  <div className="font-medium text-ink">
+                    {new Date(s.started_at.replace(" ", "T") + "Z").toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                  </div>
                   <div className="mt-1 text-sm text-muted">
                     {s.lessons_done} lesson{s.lessons_done === 1 ? "" : "s"} · {s.quizzes_done} quiz{s.quizzes_done === 1 ? "" : "zes"} · {s.cards_reviewed} card{s.cards_reviewed === 1 ? "" : "s"}
                   </div>
