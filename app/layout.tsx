@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
-import { FooterArt, LogoMark } from "@/components/art";
+import { LogoMark } from "@/components/art";
+import { AsciiScene } from "@/components/ascii-scene";
 import { DebugToggle } from "@/components/debug";
 import "./globals.css";
 
@@ -34,8 +35,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-8 pt-6">{children}</main>
-        <footer className="mt-4">
-          <FooterArt />
+        <footer className="mt-6">
+          <AsciiScene />
           <div className="border-t border-brand/25 bg-[#040913]">
             <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-2 px-4 py-5 text-sm">
               <span className="font-display text-base text-ink">Learn anything, one lesson at a time.</span>

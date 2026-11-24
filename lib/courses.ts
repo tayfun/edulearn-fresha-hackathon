@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getDb } from "./db";
+import { getDb, uniqueSlug } from "./db";
 import { chatJson, chatStream, chatText } from "./llm";
 import { LENGTHS, LengthPreset, WEAK_THRESHOLD, activityGrid, dailyPlan, inspectSvg, fitMinutes, progressPercent, toneInstruction } from "./logic";
 import { courseStreak, listSessions, touchSession } from "./session";
@@ -10,7 +10,7 @@ export class NotFound extends Error {}
 
 export type CourseRow = {
   id: number; topic: string; title: string; description: string; goal: string; tone: string;
-  prior_knowledge: string; length_preset: LengthPreset; created_at: string; image_svg: string | null;
+  prior_knowledge: string; length_preset: LengthPreset; created_at: string; image_svg: string | null; slug: string;
 };
 export type LessonRow = {
   id: number; course_id: number; module_id: number; position: number; title: string; objectives: string;
@@ -72,7 +72,7 @@ export type CourseInput = {
   topic: string; goal: string; priorKnowledge: string; tone: string; length: LengthPreset;
 };
 
-export async function createCourse(input: CourseInput): Promise<number> {
+export async function createCourse(input: CourseInput): Promise<{ id: number; slug: string }> {
   const preset = LENGTHS[input.length];
   const grounding = await webSearch(`${input.topic} learning roadmap syllabus`, 5);
   const outline = await chatJson({
@@ -110,8 +110,8 @@ ${grounding.length ? `\nWeb search results for grounding (use to judge what matt
   const save = db.transaction(() => {
     const courseId = Number(
       db
-        .prepare("INSERT INTO courses (topic, title, description, goal, tone, prior_knowledge, length_preset) VALUES (?,?,?,?,?,?,?)")
-        .run(input.topic, outline.title, outline.description, input.goal, input.tone, input.priorKnowledge, input.length).lastInsertRowid,
+        .prepare("INSERT INTO courses (topic, title, slug, description, goal, tone, prior_knowledge, length_preset) VALUES (?,?,?,?,?,?,?,?)")
+        .run(input.topic, outline.title, uniqueSlug(db, outline.title), outline.description, input.goal, input.tone, input.priorKnowledge, input.length).lastInsertRowid,
     );
     const conceptIds = new Map<string, number>();
     const moduleIds: { id: number; title: string }[] = [];
@@ -159,7 +159,7 @@ ${grounding.length ? `\nWeb search results for grounding (use to judge what matt
   })();
   traceNote("db", "Save web resources", `${seen.size} links across ${moduleIds.length} modules`);
   touchSession(courseId);
-  return courseId;
+  return { id: courseId, slug: getCourseRow(courseId).slug };
 }
 
 // ---------- reads ----------
@@ -211,7 +211,7 @@ export function getCourseDetail(id: number) {
     )
     .all(id) as { lesson_id: number; best: number }[];
   const best = new Map(lessonScores.map((r) => [r.lesson_id, r.best]));
-  const lessons = s.lessons.map((l) => ({ ...l, objectives: JSON.parse(l.objectives) as string[], bestScore: best.get(l.id) ?? null }));
+  const lessons = s.lessons.map((l) => ({ ...l, number: l.position + 1, objectives: JSON.parse(l.objectives) as string[], bestScore: best.get(l.id) ?? null }));
   return {
     course: { ...course, lengthLabel: LENGTHS[course.length_preset].label },
     progress: s.progress,
@@ -310,6 +310,13 @@ export function lessonConcepts(lessonId: number) {
     .all(lessonId) as { id: number; name: string; mastery: number | null }[];
 }
 
+/** The course's n-th lesson (1-based), as used in /courses/<slug>/<n>. */
+export function lessonIdByNumber(courseId: number, n: number): number {
+  const row = getDb().prepare("SELECT id FROM lessons WHERE course_id = ? AND position = ?").get(courseId, n - 1) as { id: number } | undefined;
+  if (!row) throw new NotFound("Lesson not found");
+  return row.id;
+}
+
 export function getLessonDetail(id: number) {
   const db = getDb();
   const lesson = getLessonRow(id);
@@ -321,12 +328,12 @@ export function getLessonDetail(id: number) {
   const bestScore = (db.prepare("SELECT MAX(a.score) AS s FROM attempts a JOIN quizzes q ON q.id = a.quiz_id WHERE q.lesson_id = ?").get(id) as { s: number | null }).s;
   return {
     lesson: { ...lesson, objectives: JSON.parse(lesson.objectives) as string[] },
-    course: { id: course.id, title: course.title, tone: course.tone },
+    course: { id: course.id, title: course.title, tone: course.tone, slug: course.slug },
     module: mod,
     index: idx + 1,
     total: all.length,
-    prev: all[idx - 1] ?? null,
-    next: all[idx + 1] ?? null,
+    prev: all[idx - 1] ? { ...all[idx - 1], number: idx } : null,
+    next: all[idx + 1] ? { ...all[idx + 1], number: idx + 2 } : null,
     concepts: lessonConcepts(id),
     resources: db.prepare("SELECT id, title, url, snippet FROM resources WHERE module_id = ?").all(lesson.module_id),
     quizId: quiz?.id ?? null,

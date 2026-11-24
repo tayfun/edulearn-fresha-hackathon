@@ -69,8 +69,8 @@ function Wizard() {
     setError("");
     try {
       const goal = questions!.map((q, i) => `${q.question} ${answers[i]}`).join(" | ");
-      const { id } = await api<{ id: number }>("/api/courses", { body: { topic, goal, priorKnowledge: prior, tone: toneValue, length } });
-      router.push(`/courses/${id}`);
+      const { slug } = await api<{ slug: string }>("/api/courses", { body: { topic, goal, priorKnowledge: prior, tone: toneValue, length } });
+      router.push(`/courses/${slug}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not build the course");
       setGenerating(false);

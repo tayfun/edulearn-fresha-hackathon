@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
+import { slugify } from "./logic";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS courses (
@@ -141,7 +142,22 @@ export function openDb(file: string): DB {
   // Added after the first release: the generated course illustration.
   const cols = db.prepare("PRAGMA table_info(courses)").all() as { name: string }[];
   if (!cols.some((c) => c.name === "image_svg")) db.exec("ALTER TABLE courses ADD COLUMN image_svg TEXT");
+  // Readable course addresses: /courses/black-holes-made-simple
+  if (!cols.some((c) => c.name === "slug")) db.exec("ALTER TABLE courses ADD COLUMN slug TEXT");
+  for (const row of db.prepare("SELECT id, title FROM courses WHERE slug IS NULL").all() as { id: number; title: string }[]) {
+    db.prepare("UPDATE courses SET slug = ? WHERE id = ?").run(uniqueSlug(db, row.title), row.id);
+  }
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_courses_slug ON courses(slug)");
   return db;
+}
+
+/** A slug no other course uses: the plain one, or with -2, -3, ... appended. */
+export function uniqueSlug(db: DB, title: string): string {
+  const base = slugify(title);
+  const used = db.prepare("SELECT 1 FROM courses WHERE slug = ?");
+  let slug = base;
+  for (let n = 2; used.get(slug); n++) slug = `${base}-${n}`;
+  return slug;
 }
 
 /** Shared connection, kept on globalThis so dev hot-reload does not reopen it. */

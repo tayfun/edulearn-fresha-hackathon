@@ -39,14 +39,14 @@ export function getWeaknesses(courseId: number) {
       return {
         ...c,
         missed: missedQuestions(c.id),
-        lessons: db.prepare("SELECT l.id, l.title FROM lessons l JOIN lesson_concepts lc ON lc.lesson_id = l.id WHERE lc.concept_id = ? ORDER BY l.position").all(c.id),
+        lessons: db.prepare("SELECT l.id, l.title, l.position + 1 AS number FROM lessons l JOIN lesson_concepts lc ON lc.lesson_id = l.id WHERE lc.concept_id = ? ORDER BY l.position").all(c.id),
         resources: db.prepare("SELECT id, title, url, snippet FROM resources WHERE concept_id = ?").all(c.id),
         recommendation: rec ? { advice: rec.advice, steps: JSON.parse(rec.steps) as string[], stale: !!c.last_seen_at && rec.created_at < c.last_seen_at } : null,
         flashcards: (db.prepare("SELECT COUNT(*) AS n FROM flashcards WHERE concept_id = ?").get(c.id) as { n: number }).n,
       };
     });
   return {
-    course: { id: course.id, title: course.title },
+    course: { id: course.id, title: course.title, slug: course.slug },
     weak,
     tracked: concepts.filter((c) => c.mastery !== null).map((c) => ({ id: c.id, name: c.name, mastery: c.mastery, correct: c.correct, incorrect: c.incorrect })),
     untested: concepts.filter((c) => c.mastery === null).length,
@@ -160,7 +160,7 @@ export function getFlashcards(courseId: number) {
        FROM flashcards f LEFT JOIN concepts c ON c.id = f.concept_id WHERE f.course_id = ? ORDER BY f.due_at, f.id`,
     )
     .all(courseId) as { id: number; front: string; back: string; box: number; due_at: string; reviews: number; concept: string | null; due: number }[];
-  return { course: { id: course.id, title: course.title }, cards, weakCount: weakConcepts(courseId).length };
+  return { course: { id: course.id, title: course.title, slug: course.slug }, cards, weakCount: weakConcepts(courseId).length };
 }
 
 export function reviewFlashcard(cardId: number, knewIt: boolean) {

@@ -155,6 +155,20 @@ export function activityGrid(counts: Record<string, number>, weeks = 12, today =
   );
 }
 
+/** URL-safe name for a course title: "Black Holes: Made Simple!" -> "black-holes-made-simple". */
+export function slugify(title: string): string {
+  const slug = title
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+    .replace(/-+$/g, "");
+  // An all-digit slug would be indistinguishable from a numeric course id.
+  return !slug || /^\d+$/.test(slug) ? `course-${slug || "untitled"}` : slug;
+}
+
 /** Match a model-supplied concept name to one of the known names. */
 export function matchConcept<T extends { name: string }>(name: string | undefined, known: T[]): T | undefined {
   if (known.length === 0) return undefined;

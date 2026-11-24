@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { openDb } from "../lib/db";
-import { LENGTHS, activityGrid, cleanSvg, dailyPlan, inspectSvg, fitMinutes, isWeak, matchConcept, nextMastery, progressPercent, reviewCard, streak, toneInstruction } from "../lib/logic";
+import { openDb, uniqueSlug } from "../lib/db";
+import { LENGTHS, activityGrid, cleanSvg, dailyPlan, inspectSvg, fitMinutes, isWeak, matchConcept, nextMastery, progressPercent, reviewCard, slugify, streak, toneInstruction } from "../lib/logic";
 import { extractJson } from "../lib/llm";
+import { SCENE_ROWS, buildScene, sceneText } from "../lib/ascii";
 
 describe("mastery", () => {
   it("first answer sets mastery, later answers move it halfway", () => {
@@ -157,5 +158,40 @@ describe("database", () => {
     for (const t of ["modules", "lessons", "concepts"]) {
       expect((db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n).toBe(0);
     }
+  });
+});
+
+describe("ascii scene", () => {
+  it("fits any width exactly, with the dome in the middle", () => {
+    for (const cols of [32, 46, 80, 120, 150]) {
+      const scene = buildScene(cols);
+      const lines = sceneText(scene).split("\n");
+      expect(lines).toHaveLength(SCENE_ROWS);
+      expect(lines.every((l) => l.length === cols)).toBe(true);
+      // the lantern cross on top of the dome sits on the centre column
+      expect(lines.some((l) => l[Math.floor(cols / 2)] === "+" || l[Math.floor(cols / 2) - 1] === "+")).toBe(true);
+    }
+  });
+  it("adds the bell tower and more buildings as width grows", () => {
+    const count = (cols: number) => sceneText(buildScene(cols)).split("[]").length;
+    expect(count(120)).toBeGreaterThan(count(46));
+  });
+});
+
+describe("course addresses", () => {
+  it("turns titles into readable slugs", () => {
+    expect(slugify("Black Holes: Made Simple!")).toBe("black-holes-made-simple");
+    expect(slugify("  Café & Crème — 101  ")).toBe("cafe-creme-101");
+    expect(slugify("1984")).toBe("course-1984");
+    expect(slugify("???")).toBe("course-untitled");
+    expect(slugify("x".repeat(80) + " tail").length).toBeLessThanOrEqual(60);
+  });
+  it("keeps slugs unique and backfills courses created before slugs existed", () => {
+    const db = openDb(":memory:");
+    const add = (title: string) => db.prepare("INSERT INTO courses (topic, title, slug, tone, length_preset) VALUES ('t', ?, ?, 'Beginner', '5min')").run(title, uniqueSlug(db, title));
+    add("Black Holes Made Simple");
+    add("Black Holes Made Simple");
+    add("Black Holes Made Simple");
+    expect((db.prepare("SELECT slug FROM courses ORDER BY id").all() as { slug: string }[]).map((r) => r.slug)).toEqual(["black-holes-made-simple", "black-holes-made-simple-2", "black-holes-made-simple-3"]);
   });
 });

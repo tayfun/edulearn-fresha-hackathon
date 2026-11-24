@@ -124,7 +124,7 @@ export function getQuiz(quizId: number) {
   const course = getCourseRow(quiz.course_id);
   const attempts = getDb().prepare("SELECT id, score, created_at FROM attempts WHERE quiz_id = ? ORDER BY id DESC").all(quizId);
   return {
-    quiz: { ...quiz, courseTitle: course.title },
+    quiz: { ...quiz, courseTitle: course.title, courseSlug: course.slug },
     questions: questions.map((q) => ({ id: q.id, type: q.type, prompt: q.prompt, options: JSON.parse(q.options) as string[] })),
     attempts,
   };
@@ -211,7 +211,7 @@ export function getAttempt(attemptId: number) {
   const concepts = conceptIds.length
     ? (db.prepare(`SELECT id, name, mastery FROM concepts WHERE id IN (${conceptIds.map(() => "?").join(",")})`).all(...conceptIds) as Concept[])
     : [];
-  const next = db.prepare("SELECT id, title FROM lessons WHERE course_id = ? AND completed_at IS NULL ORDER BY position LIMIT 1").get(quiz.course_id) as { id: number; title: string } | undefined;
+  const next = db.prepare("SELECT id, title, position + 1 AS number FROM lessons WHERE course_id = ? AND completed_at IS NULL ORDER BY position LIMIT 1").get(quiz.course_id) as { id: number; title: string; number: number } | undefined;
   return {
     attempt,
     quiz,

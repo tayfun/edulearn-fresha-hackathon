@@ -15,4 +15,4 @@ const Input = z.object({
   length: z.enum(Object.keys(LENGTHS) as [LengthPreset, ...LengthPreset[]]),
 });
 
-export const POST = route(async (req) => ({ id: await createCourse(await body(req, Input)) }));
+export const POST = route(async (req) => createCourse(await body(req, Input)));

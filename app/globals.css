@@ -162,3 +162,7 @@ html { scroll-behavior: smooth; }
 @keyframes comet { from { stroke-dashoffset: var(--from); } to { stroke-dashoffset: var(--to); } }
 .comet { animation: comet 14s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .comet { animation: none; display: none; } .panel:hover { transform: none; } }
+
+@keyframes flow { to { stroke-dashoffset: -24; } }
+.flow { animation: flow 1.4s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .flow { animation: none; } }

@@ -37,6 +37,13 @@ persistent disk.
   plan for multi-day courses, and a log of study sessions with the weak spots
   at the end of each.
 
+## Addresses
+
+Courses are addressed by name and lessons by their number within the course:
+`/courses/black-holes-made-simple` and `/courses/black-holes-made-simple/3`.
+Two courses with the same title get `-2`, `-3`, … appended. Older numeric
+links (`/courses/1`, `/lessons/17`) still work and forward to the new form.
+
 ## Debug mode
 
 Switch on **Debug** in the header to open a live activity panel: every model

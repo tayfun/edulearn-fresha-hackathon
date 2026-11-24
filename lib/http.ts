@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { NotFound } from "./courses";
+import { getDb } from "./db";
 
 type Ctx = { params: Promise<Record<string, string>> };
 
-/** Wrap a route handler: resolves numeric ids and turns thrown errors into JSON responses. */
+/** Wrap a route handler: resolves ids (numeric, or a course slug) and turns thrown errors into JSON responses. */
 export function route(fn: (req: Request, ids: Record<string, number>) => Promise<Response | unknown> | Response | unknown) {
   return async (req: Request, ctx: Ctx) => {
     try {
@@ -11,8 +12,14 @@ export function route(fn: (req: Request, ids: Record<string, number>) => Promise
       const ids: Record<string, number> = {};
       for (const [k, v] of Object.entries(raw)) {
         const n = Number(v);
-        if (!Number.isInteger(n) || n <= 0) throw new NotFound("Not found");
-        ids[k] = n;
+        if (Number.isInteger(n) && n > 0) {
+          ids[k] = n;
+          continue;
+        }
+        // Anything else is a course slug, e.g. /api/courses/black-holes-made-simple
+        const course = getDb().prepare("SELECT id FROM courses WHERE slug = ?").get(decodeURIComponent(v)) as { id: number } | undefined;
+        if (!course) throw new NotFound("Not found");
+        ids[k] = course.id;
       }
       const out = await fn(req, ids);
       return out instanceof Response ? out : Response.json(out ?? { ok: true });

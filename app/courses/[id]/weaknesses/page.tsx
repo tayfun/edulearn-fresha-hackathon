@@ -8,7 +8,7 @@ import { Card, Crumbs, Dots, ErrorNote, Loading, ProgressBar, ResourceList, api,
 type Weak = {
   id: number; name: string; mastery: number | null; correct: number; incorrect: number; flashcards: number;
   missed: { prompt: string; answered: string; correct: string }[];
-  lessons: { id: number; title: string }[];
+  lessons: { id: number; title: string; number: number }[];
   resources: { id: number; title: string; url: string }[];
   recommendation: { advice: string; steps: string[]; stale: boolean } | null;
 };
@@ -51,7 +51,7 @@ export default function WeaknessesPage() {
     setBusy("practice");
     setActionError("");
     try {
-      const { id: quizId } = await api<{ id: number }>("/api/quizzes", { body: { kind: "practice", courseId: Number(id) } });
+      const { id: quizId } = await api<{ id: number }>("/api/quizzes", { body: { kind: "practice", courseId: data!.course.id } });
       router.push(`/quizzes/${quizId}`);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Could not create the practice quiz");
@@ -159,7 +159,7 @@ export default function WeaknessesPage() {
                       <ul className="mt-1 space-y-1 text-sm">
                         {w.lessons.map((l) => (
                           <li key={l.id}>
-                            <Link href={`/lessons/${l.id}`} className="text-brand-dark hover:underline">
+                            <Link href={`/courses/${id}/${l.number}`} className="text-brand-dark hover:underline">
                               {l.title}
                             </Link>
                           </li>

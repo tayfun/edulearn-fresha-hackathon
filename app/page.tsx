@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Card, ErrorNote, ProgressBar, btn, useLoad } from "@/components/ui";
 
 type CourseSummary = {
-  id: number; title: string; topic: string; tone: string; lengthLabel: string; progress: number;
+  id: number; slug: string; title: string; topic: string; tone: string; lengthLabel: string; progress: number;
   lessonsDone: number; lessonsTotal: number; weakCount: number; dueCards: number; image: string | null;
 };
 
@@ -63,7 +63,7 @@ export default function Home() {
         {data && data.courses.length === 0 && <p className="text-muted">No courses yet. Your first one is a sentence away.</p>}
         <div className="grid gap-4 sm:grid-cols-2">
           {data?.courses.map((c) => (
-            <Link key={c.id} href={`/courses/${c.id}`} className="group">
+            <Link key={c.id} href={`/courses/${c.slug}`} className="group">
               <Card className="lift h-full group-hover:border-brand">
                 <div className="flex items-start justify-between gap-3">
                   {c.image && (

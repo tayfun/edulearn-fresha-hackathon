@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { HeaderArt, Icon } from "@/components/art";
+import { HeaderArt, HeaderBand, Icon } from "@/components/art";
 import { Card, ErrorNote, Loading, ResourceList, api, useLoad } from "@/components/ui";
 
-type Lesson = { id: number; title: string; est_minutes: number; completed_at: string | null; objectives: string[]; bestScore: number | null };
+type Lesson = { id: number; number: number; title: string; est_minutes: number; completed_at: string | null; objectives: string[]; bestScore: number | null };
 type Detail = {
-  course: { id: number; title: string; description: string; topic: string; tone: string; lengthLabel: string; image_svg: string | null };
+  course: { id: number; title: string; description: string; topic: string; tone: string; lengthLabel: string; image_svg: string | null; created_at: string };
   progress: number;
   lessonsDone: number;
   lessonsTotal: number;
@@ -73,7 +73,7 @@ function ProgressRing({ value }: { value: number }) {
   const r = 52;
   const full = 2 * Math.PI * r;
   return (
-    <div className="relative mx-auto h-48 w-48 sm:h-52 sm:w-52" role="img" aria-label={`Course progress ${value}%`}>
+    <div className="relative mx-auto h-48 w-48 sm:h-56 sm:w-56" role="img" aria-label={`Course progress ${value}%`}>
       <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90 overflow-visible">
         <defs>
           <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
@@ -139,7 +139,7 @@ function Heatmap({ weeks }: { weeks: Detail["activity"] }) {
 /** A perspective floor that fades out towards the horizon and the sides, with a pool of light where the subject stands. */
 function Floor() {
   return (
-    <svg aria-hidden viewBox="0 0 400 110" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-[52%] w-full">
+    <svg aria-hidden viewBox="0 0 400 110" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-[38%] w-full">
       <defs>
         <radialGradient id="floorfade" cx="0.5" cy="0.45" r="0.6">
           <stop offset="0" stopColor="#fff" />
@@ -154,10 +154,10 @@ function Floor() {
           <stop offset="1" stopColor="#22d3ee" stopOpacity="0" />
         </radialGradient>
       </defs>
-      <ellipse cx="200" cy="34" rx="150" ry="26" fill="url(#pool)" />
+      <ellipse cx="200" cy="18" rx="150" ry="18" fill="url(#pool)" />
       <g mask="url(#floormask)" stroke="#22d3ee" strokeWidth="1" vectorEffect="non-scaling-stroke">
         {[-520, -380, -270, -180, -105, -45, 0, 45, 105, 180, 270, 380, 520].map((dx) => (
-          <line key={dx} x1={200 + dx * 0.38} y1="14" x2={200 + dx * 1.7} y2="110" opacity="0.55" />
+          <line key={dx} x1={200 + dx * 0.38} y1="14" x2={200 + dx * 1.7} y2="110" opacity="0.6" strokeDasharray="7 5" className="flow" />
         ))}
         {[14, 22, 33, 48, 68, 94].map((y, i) => (
           <line key={y} x1="0" y1={y} x2="400" y2={y} opacity={0.3 + i * 0.08} className="twinkle" style={{ "--i": i } as React.CSSProperties} />
@@ -189,9 +189,9 @@ function CourseImage({ courseId, initial }: { courseId: number; initial: string 
       {svg ? (
         // The drawing is model output: an <img> renders it without running anything inside it.
         // eslint-disable-next-line @next/next/no-img-element
-        <img alt="" src={`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`} className="fade-in glow-line relative mx-auto h-[82%] w-auto" />
+        <img alt="" src={`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`} className="fade-in glow-line relative mx-auto h-[80%] w-auto" />
       ) : (
-        <svg aria-hidden viewBox="0 0 400 240" className="glow-line relative mx-auto h-[82%]">
+        <svg aria-hidden viewBox="0 0 400 240" className="glow-line relative mx-auto h-[80%]">
           <path
             d="M40 150 C90 40 130 40 180 120 S270 220 320 90 L360 60"
             fill="none"
@@ -210,7 +210,7 @@ function CourseImage({ courseId, initial }: { courseId: number; initial: string 
 }
 
 /** Every lesson as a waypoint on one glowing track from Start to Finish. */
-function Path({ lessons, nextId }: { lessons: Lesson[]; nextId: number | null }) {
+function Path({ lessons, nextId, base }: { lessons: Lesson[]; nextId: number | null; base: string }) {
   const n = lessons.length;
   const nextIndex = lessons.findIndex((l) => l.id === nextId);
   const pos = (i: number) => (n === 1 ? 50 : (i / (n - 1)) * 100);
@@ -226,7 +226,7 @@ function Path({ lessons, nextId }: { lessons: Lesson[]; nextId: number | null })
           return (
             <li key={l.id} className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ left: `${pos(i)}%` }}>
               <Link
-                href={`/lessons/${l.id}`}
+                href={`${base}/${l.number}`}
                 title={`${i + 1}. ${bare(l.title)}${l.completed_at ? " (done)" : isNext ? " (up next)" : ""}`}
                 aria-label={`Lesson ${i + 1}: ${bare(l.title)}${l.completed_at ? ", done" : isNext ? ", up next" : ""}`}
                 className={`group relative flex items-center justify-center ${dense ? "h-6 w-2" : "h-8 w-6"}`}
@@ -302,6 +302,7 @@ export default function CoursePage() {
   const done = data.progress === 100;
   const allLessons = data.modules.flatMap((m) => m.lessons);
   const nextLesson = allLessons.find((l) => l.id === data.nextLessonId);
+  const thisWeek = data.activity[data.activity.length - 1] ?? [];
   const activeDays = data.activity.flat().filter((d) => d.count > 0).length;
   const scores = allLessons.map((l) => l.bestScore).filter((x): x is number => x !== null);
   const avgScore = scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 100) : null;
@@ -332,22 +333,28 @@ export default function CoursePage() {
             ))}
           </div>
         </div>
+        <HeaderBand />
       </header>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Panel i={1} icon="target" title="Course progress">
-          <div className="flex flex-1 flex-col justify-center py-4">
+          <div className="flex flex-1 flex-col justify-center py-5">
             <ProgressRing value={data.progress} />
           </div>
-          <p className="text-center text-sm text-ink">
-            {data.lessonsDone} of {data.lessonsTotal} lessons <span className="text-muted">·</span> <span className="text-brand">{fmtMinutes(minutesDone)}</span> studied
-          </p>
-          <p className="mt-1 text-center text-xs text-muted">
-            {done
-              ? "Every lesson complete"
-              : plan
-                ? `Day ${Math.min(plan.dayNumber, plan.totalDays)} of ${plan.totalDays} · target pace ${plan.expectedPercent}%`
-                : `${fmtMinutes(data.minutesTotal - minutesDone)} to go`}
+          <dl className="grid grid-cols-3 divide-x divide-line rounded-xl border border-line bg-paper/50 text-center">
+            {[
+              [`${data.lessonsDone}/${data.lessonsTotal}`, "lessons"],
+              [fmtMinutes(minutesDone), "studied"],
+              [done ? "0 min" : fmtMinutes(data.minutesTotal - minutesDone), "to go"],
+            ].map(([value, label]) => (
+              <div key={label} className="px-1 py-2.5">
+                <dd className="text-base font-bold text-white">{value}</dd>
+                <dt className="text-xs text-muted">{label}</dt>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-3 text-center text-xs text-muted">
+            {done ? "Every lesson complete" : plan ? `Day ${Math.min(plan.dayNumber, plan.totalDays)} of ${plan.totalDays} · target pace ${plan.expectedPercent}%` : "One sitting is all it takes"}
           </p>
         </Panel>
 
@@ -359,7 +366,28 @@ export default function CoursePage() {
               <span className="block text-sm text-muted">{data.streak > 1 ? "Keep it up!" : data.streak === 1 ? "It starts with one day." : "Study today to start one."}</span>
             </span>
           </div>
-          <div className="my-auto py-5">
+          <div className="mt-5">
+            <div className="mb-1.5 flex items-baseline justify-between text-xs text-muted">
+              <span>This week</span>
+              <span>
+                <span className="font-semibold text-ink">{thisWeek.filter((d) => d.count > 0).length}</span> of 7 days
+              </span>
+            </div>
+            <ol className="grid grid-cols-7 gap-1.5">
+              {thisWeek.map((d, i) => (
+                <li
+                  key={d.date}
+                  aria-label={`${["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][i]}: ${d.count ? "studied" : d.future ? "upcoming" : "no study"}`}
+                  className={`flex h-9 items-center justify-center rounded-lg text-xs font-semibold ${
+                    d.count ? "bg-brand text-on-brand shadow-[0_0_12px_rgb(34_211_238/0.6)]" : d.future ? "border border-dashed border-line text-muted" : "border border-line bg-paper/50 text-muted"
+                  }`}
+                >
+                  {"MTWTFSS"[i]}
+                </li>
+              ))}
+            </ol>
+          </div>
+          <div className="my-auto py-4">
             <Heatmap weeks={data.activity} />
           </div>
           <p className="text-center text-xs text-muted">
@@ -379,7 +407,7 @@ export default function CoursePage() {
                   <p className="mt-0.5 text-xl font-bold leading-snug text-white">{bare(nextLesson.title)}</p>
                   {nextLesson.objectives[0] && <p className="mb-4 mt-1 line-clamp-2 text-sm text-muted">{nextLesson.objectives[0]}</p>}
                   <Link
-                    href={`/lessons/${nextLesson.id}`}
+                    href={`/courses/${id}/${nextLesson.number}`}
                     className="glow-btn group mt-auto flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#22d3ee] to-[#5eead4] px-5 py-3 text-sm font-bold text-on-brand transition hover:brightness-110"
                   >
                     {data.lessonsDone === 0 ? "Start" : "Continue"}
@@ -406,8 +434,8 @@ export default function CoursePage() {
       </div>
 
       <section className="panel rise p-5" style={delay(4)}>
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="flex items-center gap-2 font-sans text-sm font-medium tracking-normal text-ink">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+          <h2 className="flex shrink-0 items-center gap-2 whitespace-nowrap font-sans text-sm font-medium tracking-normal text-ink">
             <Icon name="flag" className="h-[18px] w-[18px] text-brand" />
             Your path
           </h2>
@@ -422,7 +450,7 @@ export default function CoursePage() {
           </span>
         </div>
         <div className="mt-4">
-          <Path lessons={allLessons} nextId={data.nextLessonId} />
+          <Path lessons={allLessons} nextId={data.nextLessonId} base={`/courses/${id}`} />
         </div>
         <div className="mx-2 mt-1 flex justify-between text-xs uppercase tracking-wider text-muted">
           <span>Start</span>
@@ -467,7 +495,7 @@ export default function CoursePage() {
             <ul className="mt-3 space-y-2">
               {plan.upNext.map((l) => (
                 <li key={l.id}>
-                  <Link href={`/lessons/${l.id}`} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-paper/60 px-4 py-2.5 text-sm transition hover:border-brand">
+                  <Link href={`/courses/${id}/${allLessons.find((x) => x.id === l.id)?.number ?? 1}`} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-paper/60 px-4 py-2.5 text-sm transition hover:border-brand">
                     <span>{bare(l.title)}</span>
                     <span className="shrink-0 text-xs text-muted">{l.est_minutes} min</span>
                   </Link>
@@ -528,7 +556,7 @@ export default function CoursePage() {
                   return (
                     <li key={l.id}>
                       <Link
-                        href={`/lessons/${l.id}`}
+                        href={`/courses/${id}/${l.number}`}
                         className={`group flex items-start gap-3 px-2 py-3 transition sm:items-center ${isNext ? "bg-brand-soft/70 hover:bg-brand-soft" : "hover:bg-white/[0.03]"}`}
                       >
                         <span
@@ -601,7 +629,8 @@ export default function CoursePage() {
         </section>
       )}
 
-      <div className="mt-4 border-t border-line pt-4 text-right">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+        <span className="text-xs text-muted">Course created {new Date(course.created_at.replace(" ", "T") + "Z").toLocaleDateString(undefined, { dateStyle: "medium" })}</span>
         <button onClick={remove} className="text-sm text-muted hover:text-bad hover:underline">
           Delete this course
         </button>

@@ -6,12 +6,12 @@ import { useState } from "react";
 import { Card, Crumbs, Dots, ErrorNote, Loading, ProgressBar, api, btn, masteryTone, useLoad } from "@/components/ui";
 
 type Quiz = {
-  quiz: { id: number; course_id: number; lesson_id: number | null; kind: string; title: string; courseTitle: string };
+  quiz: { id: number; course_id: number; lesson_id: number | null; kind: string; title: string; courseTitle: string; courseSlug: string };
   questions: { id: number; type: "mcq" | "short"; prompt: string; options: string[] }[];
 };
 type Result = {
   attempt: { id: number; score: number };
-  nextLesson: { id: number; title: string } | null;
+  nextLesson: { id: number; title: string; number: number } | null;
   weakCount: number;
   review: { id: number; type: "mcq" | "short"; prompt: string; options: string[]; response: string; correct: boolean; correctAnswer: string; correctIndex: number | null; explanation: string; feedback: string; concept: string | null }[];
   concepts: { id: number; name: string; mastery: number | null; weak: boolean }[];
@@ -28,7 +28,7 @@ export default function QuizPage() {
   if (error) return <ErrorNote message={error} onRetry={reload} />;
   if (!data) return <Loading label="Loading the quiz" />;
   const { quiz, questions } = data;
-  const courseHref = `/courses/${quiz.course_id}`;
+  const courseHref = `/courses/${quiz.courseSlug}`;
   const answered = questions.filter((q) => (responses[q.id] ?? "").trim()).length;
 
   async function submit() {
@@ -70,7 +70,7 @@ export default function QuizPage() {
               </Link>
             )}
             {result.nextLesson ? (
-              <Link href={`/lessons/${result.nextLesson.id}`} className={weak.length ? btn.secondary : btn.primary}>
+              <Link href={`${courseHref}/${result.nextLesson.number}`} className={weak.length ? btn.secondary : btn.primary}>
                 Next lesson →
               </Link>
             ) : (
