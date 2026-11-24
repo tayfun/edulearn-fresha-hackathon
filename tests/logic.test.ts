@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { openDb } from "../lib/db";
-import { LENGTHS, activityGrid, cleanSvg, dailyPlan, fitMinutes, isWeak, matchConcept, nextMastery, progressPercent, reviewCard, streak, toneInstruction } from "../lib/logic";
+import { LENGTHS, activityGrid, cleanSvg, dailyPlan, inspectSvg, fitMinutes, isWeak, matchConcept, nextMastery, progressPercent, reviewCard, streak, toneInstruction } from "../lib/logic";
 import { extractJson } from "../lib/llm";
 
 describe("mastery", () => {
@@ -102,13 +102,36 @@ describe("course illustration", () => {
     expect(cleanSvg(ok)).toBe(ok);
     expect(cleanSvg("Here you go:\n```svg\n" + ok + "\n```")).toBe(ok);
   });
-  it("rejects anything active, external or empty", () => {
-    expect(cleanSvg("no drawing")).toBeNull();
-    expect(cleanSvg(ok.replace("<circle", "<script>alert(1)</script><circle"))).toBeNull();
-    expect(cleanSvg(ok.replace("<circle", '<circle onload="x()"'))).toBeNull();
-    expect(cleanSvg(ok.replace("<circle", '<image href="http://x/y.png"/><circle'))).toBeNull();
-    expect(cleanSvg(ok.replace("<rect", '<rect style="fill:url(http://x)"'))).toBeNull();
-    expect(cleanSvg('<svg viewBox="0 0 1 1"><circle r="1"/></svg>')).toBeNull();
+  const robots = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M200 62V52" fill="none" stroke="#22d3ee" stroke-width="3"/>
+  <circle cx="200" cy="44" r="6" fill="none" stroke="#22d3ee" stroke-width="3"/>
+  <rect x="155" y="62" width="90" height="68" rx="16" fill="none" stroke="#22d3ee" stroke-width="3"/>
+
+  <path d="M183 108Q200 120 217 108" fill="none" stroke="#67e8f9" stroke-width="1.5"/>
+  <circle cx="140" cy="135" r="2.5" fill="#a5f3fc" stroke="none"/>
+</svg>`;
+  it("accepts a real model drawing", () => {
+    expect(cleanSvg(robots)).toBe(robots);
+  });
+  it("takes the final drawing when the reply also holds prose or an earlier draft", () => {
+    const reply = `First attempt:\n<svg viewBox="0 0 1 1"><circle r="1"/></svg>\nThat was too sparse. I must avoid <style>, <script> and href="..." as instructed.\nFinal:\n\`\`\`svg\n${robots}\n\`\`\`\nDone, no <image> used.`;
+    expect(cleanSvg(reply)).toBe(robots);
+  });
+  it("cleans a drawing instead of rejecting it", () => {
+    const messy = ok
+      .replace("<circle", '<!-- lens --><title>Camera</title><style>.a{stroke:red}</style><script>alert(1)</script><circle onload="x()"')
+      .replace("<rect", '<image href="http://x/y.png"/><text x="1" y="1">hi</text><rect');
+    expect(cleanSvg(messy)).toBe(ok);
+  });
+  it("adds a viewBox when the model leaves it out", () => {
+    expect(cleanSvg(ok.replace(' viewBox="0 0 400 240"', ""))).toContain('viewBox="0 0 400 240"');
+  });
+  it("says why when nothing usable is left", () => {
+    expect(inspectSvg("no drawing")).toEqual({ svg: null, reason: "the reply contained no <svg> element" });
+    expect(inspectSvg('<svg viewBox="0 0 1 1"><circle r="1"/>').reason).toMatch(/cut off/);
+    expect(inspectSvg('<svg viewBox="0 0 1 1"><circle r="1"/></svg>').reason).toMatch(/only 1 shape/);
+    expect(inspectSvg(ok.replace("<rect", '<rect style="fill:url(http://x)"')).reason).toMatch(/outside itself/);
+    expect(cleanSvg(ok.replace("<rect", '<rect fill="url(#g)"'))).not.toBeNull();
   });
 });
 

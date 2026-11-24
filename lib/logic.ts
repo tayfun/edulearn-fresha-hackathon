@@ -105,19 +105,41 @@ export function dailyPlan(preset: LengthPreset, createdAt: string, lessons: Plan
   };
 }
 
+const SHAPE = /<(path|line|polyline|polygon|circle|ellipse|rect)\b/gi;
+
 /**
- * Accept a model-drawn SVG only if it is plain static geometry. It is shown through an <img>,
- * which already blocks scripts and external loads; this keeps junk out of the database too.
+ * Pull a usable drawing out of a model reply. The reply may hold prose, code fences or several
+ * drafts, so every complete <svg> block is tried, last one first, and each is cleaned rather
+ * than rejected outright: comments, text, scripts, styles, links and event handlers are removed.
+ * The result is only ever shown through an <img>, which runs nothing inside it; cleaning keeps
+ * junk out of the database. When nothing usable is found, `reason` says why.
  */
-export function cleanSvg(reply: string): string | null {
-  const match = reply.replace(/<think>[\s\S]*?<\/think>/g, "").match(/<svg[\s\S]*<\/svg>/i);
-  if (!match) return null;
-  const svg = match[0].trim();
-  if (svg.length > 20_000 || !/viewBox=/i.test(svg)) return null;
-  if (/<\s*(script|style|foreignObject|image|use|iframe|a|animate|set)\b|\son\w+\s*=|href\s*=|url\s*\(|javascript:|<!|&#/i.test(svg)) return null;
-  const shapes = svg.match(/<(path|line|polyline|polygon|circle|ellipse|rect)\b/gi)?.length ?? 0;
-  return shapes >= 3 ? svg : null;
+export function inspectSvg(reply: string): { svg: string | null; reason: string } {
+  const text = reply.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  const blocks = [...text.matchAll(/<svg\b[^>]*>[\s\S]*?<\/svg\s*>/gi)].map((m) => m[0]);
+  if (blocks.length === 0) {
+    return { svg: null, reason: /<svg\b/i.test(text) ? "the drawing was cut off before </svg>" : "the reply contained no <svg> element" };
+  }
+  let reason = "";
+  for (const raw of blocks.reverse()) {
+    let svg = raw
+      .replace(/<!--[\s\S]*?-->/g, "")
+      .replace(/<!DOCTYPE[^>]*>/gi, "")
+      .replace(/<(script|style|foreignObject|iframe|a|text|title|desc|metadata)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "")
+      .replace(/<(script|style|foreignObject|iframe|a|text|title|desc|metadata|image|use|set|animate\w*)\b[^>]*\/?>/gi, "")
+      .replace(/\s(on\w+|(?:xlink:)?href)\s*=\s*("[^"]*"|'[^']*')/gi, "")
+      .trim();
+    if (!/\bviewBox\s*=/i.test(svg)) svg = svg.replace(/<svg\b/i, '<svg viewBox="0 0 400 240"');
+    const shapes = svg.match(SHAPE)?.length ?? 0;
+    if (svg.length > 30_000) reason = `the drawing is too large (${svg.length} characters)`;
+    else if (shapes < 3) reason = `the drawing has only ${shapes} shape${shapes === 1 ? "" : "s"}`;
+    else if (/javascript:|<!|url\s*\(\s*['"]?(?!#)/i.test(svg)) reason = "the drawing references something outside itself";
+    else return { svg, reason: "" };
+  }
+  return { svg: null, reason };
 }
+
+export const cleanSvg = (reply: string) => inspectSvg(reply).svg;
 
 /** Days with study activity in the last `weeks` weeks, as columns of Monday-first weeks ending this week. */
 export function activityGrid(counts: Record<string, number>, weeks = 12, today = new Date()) {

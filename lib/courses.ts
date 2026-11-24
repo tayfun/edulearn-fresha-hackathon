@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getDb } from "./db";
 import { chatJson, chatStream, chatText } from "./llm";
-import { LENGTHS, LengthPreset, WEAK_THRESHOLD, activityGrid, cleanSvg, dailyPlan, fitMinutes, progressPercent, toneInstruction } from "./logic";
+import { LENGTHS, LengthPreset, WEAK_THRESHOLD, activityGrid, dailyPlan, inspectSvg, fitMinutes, progressPercent, toneInstruction } from "./logic";
 import { courseStreak, listSessions, touchSession } from "./session";
 import { webSearch } from "./tavily";
 import { traceNote } from "./trace";
@@ -275,13 +275,13 @@ Rules:
   const job = (async () => {
     for (const model of ["image", "fast"] as const) {
       try {
-        const svg = cleanSvg(await chatText({ label: `Draw the course illustration (${model === "image" ? "illustration model" : "fast model fallback"})`, model, messages, maxTokens: 16000 }));
+        const { svg, reason } = inspectSvg(await chatText({ label: `Draw the course illustration (${model === "image" ? "illustration model" : "fast model fallback"})`, model, messages, maxTokens: 16000 }));
         if (svg) {
           getDb().prepare("UPDATE courses SET image_svg = ? WHERE id = ?").run(svg, courseId);
           traceNote("db", "Save course illustration", `${svg.length} characters of SVG`);
           return svg;
         }
-        traceNote("db", "Discard course illustration", "the reply was not a plain, static SVG");
+        traceNote("db", "Discard course illustration", reason);
       } catch {
         // already traced by chatText; try the next model
       }

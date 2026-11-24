@@ -86,9 +86,9 @@ function ProgressRing({ value }: { value: number }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-xs text-muted">Complete</span>
-        <span className="text-6xl font-bold leading-none tracking-tight tabular-nums text-white">
+        <span className="flex items-start text-6xl font-bold leading-none tracking-tight text-white">
           {shown}
-          <span className="text-2xl text-brand">%</span>
+          <span className="ml-0.5 mt-1.5 text-2xl leading-none text-brand">%</span>
         </span>
       </div>
     </div>
@@ -136,6 +136,37 @@ function Heatmap({ weeks }: { weeks: Detail["activity"] }) {
   );
 }
 
+/** A perspective floor that fades out towards the horizon and the sides, with a pool of light where the subject stands. */
+function Floor() {
+  return (
+    <svg aria-hidden viewBox="0 0 400 110" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-[52%] w-full">
+      <defs>
+        <radialGradient id="floorfade" cx="0.5" cy="0.45" r="0.6">
+          <stop offset="0" stopColor="#fff" />
+          <stop offset="0.55" stopColor="#fff" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </radialGradient>
+        <mask id="floormask">
+          <rect width="400" height="110" fill="url(#floorfade)" />
+        </mask>
+        <radialGradient id="pool" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#22d3ee" stopOpacity="0.45" />
+          <stop offset="1" stopColor="#22d3ee" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <ellipse cx="200" cy="34" rx="150" ry="26" fill="url(#pool)" />
+      <g mask="url(#floormask)" stroke="#22d3ee" strokeWidth="1" vectorEffect="non-scaling-stroke">
+        {[-520, -380, -270, -180, -105, -45, 0, 45, 105, 180, 270, 380, 520].map((dx) => (
+          <line key={dx} x1={200 + dx * 0.38} y1="14" x2={200 + dx * 1.7} y2="110" opacity="0.55" />
+        ))}
+        {[14, 22, 33, 48, 68, 94].map((y, i) => (
+          <line key={y} x1="0" y1={y} x2="400" y2={y} opacity={0.3 + i * 0.08} className="twinkle" style={{ "--i": i } as React.CSSProperties} />
+        ))}
+      </g>
+    </svg>
+  );
+}
+
 /** The course illustration on a glowing perspective floor. Drawn once by the model, then stored. */
 function CourseImage({ courseId, initial }: { courseId: number; initial: string | null }) {
   const [svg, setSvg] = useState(initial);
@@ -152,9 +183,9 @@ function CourseImage({ courseId, initial }: { courseId: number; initial: string 
   }, [courseId, initial]);
 
   return (
-    <div className="relative mt-3 h-44 overflow-hidden">
+    <div className="relative mt-3 h-40 overflow-hidden">
       <div aria-hidden className="absolute inset-0 bg-[radial-gradient(closest-side,rgb(34_211_238/0.2),transparent)]" />
-      <div aria-hidden className="grid-floor absolute inset-x-[-30%] bottom-0 h-40" />
+      <Floor />
       {svg ? (
         // The drawing is model output: an <img> renders it without running anything inside it.
         // eslint-disable-next-line @next/next/no-img-element
@@ -252,7 +283,7 @@ function Stat({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-2xl font-bold leading-tight tabular-nums text-white">{value}</span>
-        <span className="block whitespace-nowrap text-xs text-muted">{label}</span>
+        <span className="block text-xs leading-tight text-muted">{label}</span>
       </span>
       <span aria-hidden className="hidden text-muted transition group-hover:translate-x-1 group-hover:text-brand sm:block">
         →
@@ -291,9 +322,9 @@ export default function CoursePage() {
             <span aria-hidden>‹</span> My courses
           </Link>
           <p className="mt-3 text-sm font-medium uppercase tracking-widest text-brand">{data.lessonsDone === 0 ? "Ready to start" : done ? "Course complete" : "Welcome back"}</p>
-          <h1 className="mt-1 max-w-2xl text-2xl font-bold leading-tight text-white sm:text-4xl lg:max-w-[58%]">{course.title}</h1>
-          {course.description && <p className="mt-2 max-w-xl text-muted lg:max-w-[55%]">{course.description}</p>}
-          <div className="mt-4 flex flex-wrap gap-2 text-xs">
+          <h1 className="mt-1 max-w-2xl text-2xl font-bold leading-tight text-white sm:text-3xl lg:max-w-[64%] lg:text-4xl">{course.title}</h1>
+          {course.description && <p className="mt-2 max-w-xl text-muted lg:max-w-[58%]">{course.description}</p>}
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
             {[course.lengthLabel, course.tone, `${data.lessonsTotal} lesson${data.lessonsTotal === 1 ? "" : "s"}`, fmtMinutes(data.minutesTotal)].map((t) => (
               <span key={t} className="rounded-full border border-line bg-card px-2.5 py-1 text-muted">
                 {t}
@@ -322,7 +353,7 @@ export default function CoursePage() {
 
         <Panel i={2} icon="flame" title="Study streak">
           <div className="mt-3 flex items-end gap-3">
-            <span className="glow-text text-6xl font-bold leading-none tabular-nums text-brand">{data.streak}</span>
+            <span className="glow-text text-6xl font-bold leading-none tracking-tight text-brand">{data.streak}</span>
             <span className="pb-1">
               <span className="block text-lg font-bold leading-tight text-white">day streak</span>
               <span className="block text-sm text-muted">{data.streak > 1 ? "Keep it up!" : data.streak === 1 ? "It starts with one day." : "Study today to start one."}</span>
@@ -380,7 +411,15 @@ export default function CoursePage() {
             <Icon name="flag" className="h-[18px] w-[18px] text-brand" />
             Your path
           </h2>
-          <span className="text-sm text-muted">{done ? "All lessons complete" : `${data.lessonsTotal - data.lessonsDone} lesson${data.lessonsTotal - data.lessonsDone === 1 ? "" : "s"} to go`}</span>
+          <span className="min-w-0 truncate text-sm text-muted">
+            {nextLesson ? (
+              <>
+                You are at <span className="text-ink">{bare(nextLesson.title)}</span> · {data.lessonsTotal - data.lessonsDone} to go
+              </>
+            ) : (
+              "All lessons complete"
+            )}
+          </span>
         </div>
         <div className="mt-4">
           <Path lessons={allLessons} nextId={data.nextLessonId} />
@@ -393,7 +432,7 @@ export default function CoursePage() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat i={5} icon="clock" href="#curriculum" tint="bg-brand-soft text-brand" label={done ? "all done" : "left to study"} value={done ? "0 min" : fmtMinutes(data.minutesTotal - minutesDone)} />
-        <Stat i={6} icon="book" href="#curriculum" tint="bg-brand-soft text-brand" label="average quiz score" value={avgScore === null ? "–" : `${avgScore}%`} />
+        <Stat i={6} icon="book" href="#curriculum" tint="bg-brand-soft text-brand" label="avg quiz score" value={avgScore === null ? "–" : `${avgScore}%`} />
         <Stat
           i={7}
           icon="target"
@@ -417,10 +456,13 @@ export default function CoursePage() {
             </span>
           </div>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#12283d]">
-            <div className="bar-in glow-line h-full rounded-full bg-brand" style={{ width: `${Math.min(100, Math.round((plan.minutesToday / plan.dailyMinutes) * 100))}%` }} />
+            <div
+              className={`bar-in h-full rounded-full ${plan.targetMet ? "bg-good" : "glow-line bg-brand"}`}
+              style={{ width: `${Math.min(100, Math.round((plan.minutesToday / plan.dailyMinutes) * 100))}%` }}
+            />
           </div>
           {plan.targetMet ? (
-            <p className="mt-3 text-sm font-medium text-brand">✓ Target met. Come back tomorrow to keep your streak, or keep going.</p>
+            <p className="mt-3 text-sm font-medium text-good">✓ Target met. Come back tomorrow to keep your streak, or keep going.</p>
           ) : (
             <ul className="mt-3 space-y-2">
               {plan.upNext.map((l) => (
@@ -454,24 +496,29 @@ export default function CoursePage() {
         {data.modules.map((m, mi) => {
           const doneCount = m.lessons.filter((l) => l.completed_at).length;
           const modulePct = m.lessons.length ? Math.round((doneCount / m.lessons.length) * 100) : 0;
+          const active = m.lessons.some((l) => l.id === data.nextLessonId);
           return (
-            <section key={m.id} className="panel rise p-5">
+            <section key={m.id} className={`panel rise p-5 ${active ? "!border-brand/60" : ""}`}>
               <div className="flex items-start gap-4">
                 <span
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base font-bold ${modulePct === 100 ? "bg-brand text-on-brand" : "border border-brand/40 bg-brand-soft text-brand"}`}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base font-bold ${modulePct === 100 ? "bg-good text-on-brand" : active ? "border border-brand bg-brand-soft text-brand shadow-[0_0_14px_rgb(34_211_238/0.45)]" : "border border-line bg-paper text-muted"}`}
                 >
                   {modulePct === 100 ? "✓" : mi + 1}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                    <h3 className="text-lg font-bold text-white">{bare(m.title)}</h3>
+                    <h3 className="text-lg font-bold text-white">
+                      {bare(m.title)}
+                      {modulePct === 100 && <span className="ml-2 align-middle text-xs font-semibold uppercase tracking-wide text-good">Complete</span>}
+                      {active && modulePct < 100 && <span className="ml-2 align-middle text-xs font-semibold uppercase tracking-wide text-brand">In progress</span>}
+                    </h3>
                     <span className="shrink-0 text-xs text-muted">
                       {doneCount}/{m.lessons.length} lessons
                     </span>
                   </div>
                   {m.summary && <p className="mt-1 text-sm text-muted">{m.summary}</p>}
                   <div className="mt-3 h-1 overflow-hidden rounded-full bg-[#12283d]">
-                    <div className="bar-in h-full rounded-full bg-brand" style={{ width: `${modulePct}%` }} />
+                    <div className={`bar-in h-full rounded-full ${modulePct === 100 ? "bg-good" : "bg-brand"}`} style={{ width: `${modulePct}%` }} />
                   </div>
                 </div>
               </div>
@@ -486,7 +533,7 @@ export default function CoursePage() {
                       >
                         <span
                           className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold sm:mt-0 ${
-                            l.completed_at ? "border-brand bg-brand text-on-brand" : isNext ? "border-2 border-brand shadow-[0_0_10px_rgb(34_211_238/0.7)]" : "border-[#2c4a66]"
+                            l.completed_at ? "border-good bg-good text-on-brand" : isNext ? "border-2 border-brand shadow-[0_0_10px_rgb(34_211_238/0.7)]" : "border-[#2c4a66]"
                           }`}
                           aria-label={l.completed_at ? "Completed" : "Not completed"}
                         >
@@ -554,7 +601,7 @@ export default function CoursePage() {
         </section>
       )}
 
-      <div className="border-t border-line pt-4 text-right">
+      <div className="mt-4 border-t border-line pt-4 text-right">
         <button onClick={remove} className="text-sm text-muted hover:text-bad hover:underline">
           Delete this course
         </button>

@@ -39,7 +39,7 @@ const DUST: [number, number][] = [
 /** Top-of-page artwork: a constellation climbing over a faint perspective floor, behind the course title. */
 export function HeaderArt() {
   return (
-    <svg aria-hidden viewBox="0 0 480 240" className="pointer-events-none absolute -top-6 right-0 h-[115%] w-auto max-w-[60%] opacity-30 md:opacity-50 lg:max-w-[42%] lg:opacity-100">
+    <svg aria-hidden viewBox="0 0 480 240" className="pointer-events-none absolute -top-8 right-0 hidden h-[130%] w-auto max-w-[38%] lg:block">
       <defs>
         <linearGradient id="hfloor" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#22d3ee" stopOpacity="0" />
@@ -56,10 +56,18 @@ export function HeaderArt() {
         <mask id="hmask">
           <rect width="480" height="240" fill="url(#hfade)" />
         </mask>
+        <radialGradient id="hfloorfade" cx="0.6" cy="0.25" r="0.7">
+          <stop offset="0" stopColor="#fff" />
+          <stop offset="0.5" stopColor="#fff" stopOpacity="0.5" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </radialGradient>
+        <mask id="hfloormask">
+          <rect y="160" width="480" height="80" fill="url(#hfloorfade)" />
+        </mask>
       </defs>
       <g mask="url(#hmask)">
-        <ellipse cx="330" cy="110" rx="200" ry="120" fill="url(#hhalo)" />
-        <g stroke="url(#hfloor)" strokeWidth="1">
+        <ellipse cx="290" cy="112" rx="180" ry="108" fill="url(#hhalo)" />
+        <g stroke="#22d3ee" strokeOpacity="0.4" strokeWidth="1" mask="url(#hfloormask)">
           {[-420, -260, -150, -70, 0, 70, 150, 260, 420].map((dx) => (
             <line key={dx} x1={300 + dx * 0.3} y1="170" x2={300 + dx * 1.5} y2="240" />
           ))}
@@ -101,38 +109,54 @@ export function FooterArt() {
           <stop offset="0" stopColor="#22d3ee" stopOpacity="0.05" />
           <stop offset="1" stopColor="#22d3ee" stopOpacity="0.5" />
         </linearGradient>
-        <linearGradient id="ftail" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#22d3ee" stopOpacity="0" />
-          <stop offset="1" stopColor="#ecfeff" />
-        </linearGradient>
+        <radialGradient id="ffloorfade" cx="0.5" cy="0.2" r="0.75" gradientTransform="scale(1 0.9)">
+          <stop offset="0" stopColor="#fff" />
+          <stop offset="0.55" stopColor="#fff" stopOpacity="0.6" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </radialGradient>
+        <mask id="ffloormask">
+          <rect y="100" width="1200" height="70" fill="url(#ffloorfade)" />
+        </mask>
       </defs>
       <path d={far} fill="none" stroke="#0e7490" strokeWidth="1.5" opacity="0.7" />
       <path d={`${far} V170 H0 Z`} fill="#0e7490" opacity="0.07" />
       <path d={`${ridge} V170 H0 Z`} fill="#050b16" />
       <path d={`${ridge} V170 H0 Z`} fill="url(#fglow)" />
-      {/* perspective floor */}
-      <g stroke="url(#fgrid)" strokeWidth="1">
-        {[-1100, -800, -560, -380, -240, -120, 0, 120, 240, 380, 560, 800, 1100].map((dx) => (
-          <line key={dx} x1={600 + dx * 0.35} y1="100" x2={600 + dx * 1.5} y2="170" />
+      {/* perspective floor below a clean horizon, fading out at the sides and bottom */}
+      <g mask="url(#ffloormask)" stroke="#22d3ee" strokeWidth="1">
+        <line x1="0" y1="106" x2="1200" y2="106" opacity="0.5" />
+        {[-1500, -1150, -860, -620, -430, -280, -160, -70, 0, 70, 160, 280, 430, 620, 860, 1150, 1500].map((dx) => (
+          <line key={dx} x1={600 + dx * 0.4} y1="106" x2={600 + dx * 1.3} y2="170" opacity="0.4" />
         ))}
-      </g>
-      <g stroke="#22d3ee">
-        {[
-          [104, 0.12],
-          [112, 0.2],
-          [124, 0.3],
-          [140, 0.42],
-          [160, 0.55],
-        ].map(([y, o]) => (
-          <line key={y} x1="0" y1={y} x2="1200" y2={y} strokeWidth="1" opacity={o} />
+        {[112, 120, 131, 145, 162].map((y, i) => (
+          <line key={y} x1="0" y1={y} x2="1200" y2={y} opacity={0.22 + i * 0.07} />
         ))}
       </g>
       <path d={ridge} fill="none" stroke="#22d3ee" strokeWidth="2" strokeLinecap="round" className="glow-line" />
-      <g className="fly" style={{ offsetPath: `path('${ridge}')` }}>
-        <rect x="-90" y="-1.5" width="90" height="3" rx="1.5" fill="url(#ftail)" />
-        <circle r="12" fill="#22d3ee" opacity="0.3" />
-        <circle r="4.5" fill="#ecfeff" />
-      </g>
+      {/* comet: a dim tail and a bright head, both dashes on the ridge itself so they follow every curve */}
+      <path
+        d={ridge}
+        fill="none"
+        stroke="#67e8f9"
+        strokeWidth="3"
+        strokeLinecap="round"
+        pathLength={1}
+        strokeDasharray="0.09 2"
+        className="comet glow-line"
+        opacity="0.7"
+        style={{ "--from": 0.09, "--to": -1 } as React.CSSProperties}
+      />
+      <path
+        d={ridge}
+        fill="none"
+        stroke="#ecfeff"
+        strokeWidth="6"
+        strokeLinecap="round"
+        pathLength={1}
+        strokeDasharray="0.004 2"
+        className="comet glow-line"
+        style={{ "--from": 0.004, "--to": -1.086 } as React.CSSProperties}
+      />
     </svg>
   );
 }
