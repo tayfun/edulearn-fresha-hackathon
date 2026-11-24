@@ -192,6 +192,25 @@ describe("ascii scene", () => {
     const top = scene.cells.slice(Math.floor(scene.cols * 0.3), Math.floor(scene.cols * 0.7));
     expect(top.filter((c) => c.ch !== " ").length / top.length).toBeLessThan(0.05);
   });
+  it("gives the same picture for the same seed and a different one for another", () => {
+    const text = (seed: number) => sceneText(buildScene(183, SCENE_ROWS, 0.6, seed));
+    expect(text(7)).toBe(text(7));
+    expect(text(7)).not.toBe(text(8));
+    expect(text(0)).toBe(sceneText(buildScene(183, SCENE_ROWS, 0.6)));
+  });
+  it("keeps the composition whatever the seed: sun on the horizon over the river, trees at both edges", () => {
+    for (const seed of [1, 2, 3, 99, 12345, 2 ** 31 - 1]) {
+      const scene = buildScene(343, SCENE_ROWS, 0.6, seed);
+      const at = (u: number, v: number) => scene.cells[Math.floor(v * scene.rows) * scene.cols + Math.floor(u * scene.cols)].tone;
+      expect(scene.sunU).toBeGreaterThan(0.3);
+      expect(scene.sunU).toBeLessThan(0.7);
+      expect(at(scene.sunU, 0.555)).toBe("sun");
+      expect(["water", "shine"]).toContain(at(scene.sunU, 0.62));
+      expect(at(0.01, 0.97)).toBe("tree");
+      expect(at(0.99, 0.97)).toBe("tree");
+      expect(new Set(scene.cells.map((c) => c.tone)).size).toBeGreaterThanOrEqual(8);
+    }
+  });
 });
 
 describe("course addresses", () => {

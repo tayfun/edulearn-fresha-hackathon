@@ -38,6 +38,8 @@ export function AsciiScene() {
     const family = getComputedStyle(cv).fontFamily;
     const height = SCENE_ROWS * CELL_H;
     const plate = document.createElement("canvas"); // the finished picture, drawn once per size
+    // A new landscape on every page load; it stays the same while the page is open, resizes included.
+    const seed = 1 + Math.floor(Math.random() * 2 ** 31);
     let scene: Scene = buildScene(40);
     let shimmer: number[] = [];
     let heat = new Float32Array(0);
@@ -59,7 +61,7 @@ export function AsciiScene() {
       const width = el.clientWidth;
       if (!width) return;
       const cols = Math.ceil(width / CELL_W);
-      scene = buildScene(cols, SCENE_ROWS, CELL_W / CELL_H);
+      scene = buildScene(cols, SCENE_ROWS, CELL_W / CELL_H, seed);
       heat = new Float32Array(cols * SCENE_ROWS);
       hot = new Set();
       shimmer = scene.cells.flatMap((c, i) => (c.tone === "shine" ? [i] : []));
