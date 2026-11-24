@@ -137,13 +137,19 @@ CREATE INDEX IF NOT EXISTS idx_sessions_course ON study_sessions(course_id);
 `;
 
 type DB = Database.Database;
-const globalForDb = globalThis as unknown as { __edulearnDb?: DB };
+const globalForDb = globalThis as unknown as { __edulearnDb?: DB; __edulearnSchema?: string };
 
 export function openDb(file: string): DB {
   if (file !== ":memory:") fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new Database(file);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
+  applySchema(db);
+  return db;
+}
+
+/** Create missing tables and columns. Safe to run again on a database that is already set up. */
+function applySchema(db: DB) {
   db.exec(SCHEMA);
   // Added after the first release: the generated course illustration.
   const cols = db.prepare("PRAGMA table_info(courses)").all() as { name: string }[];
@@ -157,7 +163,6 @@ export function openDb(file: string): DB {
     db.prepare("UPDATE courses SET slug = ? WHERE id = ?").run(uniqueSlug(db, row.title), row.id);
   }
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_courses_slug ON courses(slug)");
-  return db;
 }
 
 /** A slug no other course uses: the plain one, or with -2, -3, ... appended. */
@@ -169,11 +174,19 @@ export function uniqueSlug(db: DB, title: string): string {
   return slug;
 }
 
-/** Shared connection, kept on globalThis so dev hot-reload does not reopen it. */
+/**
+ * Shared connection, kept on globalThis so dev hot-reload does not reopen it. The connection
+ * outlives code reloads, so when the schema in this file changes under a running dev server the
+ * new tables and columns are applied to the open connection instead of waiting for a restart.
+ */
 export function getDb(): DB {
   if (!globalForDb.__edulearnDb) {
     const file = process.env.DATABASE_PATH || path.join(process.cwd(), "data", "edulearn.db");
     globalForDb.__edulearnDb = openDb(file);
+    globalForDb.__edulearnSchema = SCHEMA;
+  } else if (globalForDb.__edulearnSchema !== SCHEMA) {
+    applySchema(globalForDb.__edulearnDb);
+    globalForDb.__edulearnSchema = SCHEMA;
   }
   return globalForDb.__edulearnDb;
 }
@@ -181,4 +194,5 @@ export function getDb(): DB {
 /** Test hook: swap the shared connection. */
 export function setDb(db: DB) {
   globalForDb.__edulearnDb = db;
+  globalForDb.__edulearnSchema = SCHEMA;
 }

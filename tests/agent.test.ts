@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { AGENT_STEPS, decideNextActivity, focusBrief, gradeAssessment } from "../lib/agent";
-import { openDb, setDb } from "../lib/db";
+import Database from "better-sqlite3";
+import { getDb, openDb, setDb } from "../lib/db";
 
 let db: ReturnType<typeof openDb>;
 beforeEach(() => {
@@ -66,5 +67,21 @@ describe("agent", () => {
     } finally {
       if (saved) process.env.NEBIUS_API_KEY = saved;
     }
+  });
+});
+
+describe("database connection", () => {
+  it("applies the current schema to a connection opened by older code", () => {
+    // What a long-running dev server holds after new code arrives: an open connection that
+    // predates the newest tables.
+    const stale = new Database(":memory:");
+    stale.exec("CREATE TABLE courses (id INTEGER PRIMARY KEY AUTOINCREMENT, topic TEXT NOT NULL, title TEXT NOT NULL, tone TEXT NOT NULL, length_preset TEXT NOT NULL, created_at TEXT)");
+    const g = globalThis as unknown as { __edulearnDb?: unknown; __edulearnSchema?: string };
+    g.__edulearnDb = stale;
+    g.__edulearnSchema = "an older schema";
+    const live = getDb();
+    expect(live).toBe(stale);
+    expect(() => live.prepare("INSERT INTO assessments (topic, questions) VALUES ('t', '[]')").run()).not.toThrow();
+    expect((live.prepare("PRAGMA table_info(courses)").all() as { name: string }[]).map((c) => c.name)).toEqual(expect.arrayContaining(["slug", "assessment", "next_activity", "image_svg"]));
   });
 });
