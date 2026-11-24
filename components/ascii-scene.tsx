@@ -1,20 +1,30 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { SCENE_ROWS, Scene, Tone, buildScene } from "@/lib/ascii";
+import { RAMP, SCENE_ROWS, Scene, Tone, buildScene } from "@/lib/ascii";
 
-const COLOR: Record<Tone, string> = { sky: "#6f8fae", hill: "#1f7d94", stone: "#67e8f9", tree: "#2dd4bf", water: "#1795b3", sun: "#fbbf24" };
+// Ink colours: periwinkle blues for the land, coral for the sun and its light.
+const COLOR: Record<Tone, [string, number]> = {
+  sky: ["#8ea2e8", 0.4],
+  glow: ["#ff9478", 0.9],
+  sun: ["#ff7a59", 1],
+  far: ["#8fa0ee", 0.9],
+  mid: ["#7c92f2", 0.85],
+  land: ["#7d97ff", 0.9],
+  tree: ["#a3b6ff", 1],
+  water: ["#6f89ee", 0.6],
+  shine: ["#ff8f70", 0.95],
+};
 const SPARK = "@#%&$*+=<>/\\|";
-const CELL_W = 8.4;
-const CELL_H = 15;
-const FONT_PX = 14;
-const REACH = 4.5; // how far, in cells, the pointer disturbs the picture
+const CELL_W = 4.2;
+const CELL_H = 7;
+const FONT_PX = 7;
+const REACH = 9; // how far, in cell widths, the pointer disturbs the picture
 
 /**
- * The footer artwork: a Renaissance-style landscape in ASCII (mountains, hills, pines, cypresses
- * and a river; no buildings). A block cursor types it in when it first scrolls into view; after
- * that the water moves and the pointer scrambles and lights up the characters it passes over,
- * which then settle back.
+ * The footer artwork: a landscape engraving in ASCII (see lib/ascii.ts). A block cursor types
+ * it in when it first scrolls into view; after that the sun's reflection shimmers on the water
+ * and the pointer scrambles and lights up the characters it passes over, which settle back.
  */
 export function AsciiScene() {
   const wrap = useRef<HTMLDivElement>(null);
@@ -26,93 +36,128 @@ export function AsciiScene() {
     const ctx = cv.getContext("2d")!;
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const family = getComputedStyle(cv).fontFamily;
+    const height = SCENE_ROWS * CELL_H;
+    const plate = document.createElement("canvas"); // the finished picture, drawn once per size
     let scene: Scene = buildScene(40);
+    let shimmer: number[] = [];
     let heat = new Float32Array(0);
+    let hot = new Set<number>();
     let revealed = still ? Infinity : 0;
     let visible = false;
     let pointer: { x: number; y: number } | null = null;
-    let frame = 0;
     let raf = 0;
     let last = 0;
+    let dpr = 1;
+
+    const paint = (c: CanvasRenderingContext2D, i: number, ch: string, color: string, alpha: number) => {
+      c.globalAlpha = alpha;
+      c.fillStyle = color;
+      c.fillText(ch, (i % scene.cols) * CELL_W, ((i / scene.cols) | 0) * CELL_H);
+    };
 
     const layout = () => {
       const width = el.clientWidth;
-      const cols = Math.max(32, Math.floor(width / CELL_W));
-      scene = buildScene(cols);
+      if (!width) return;
+      const cols = Math.ceil(width / CELL_W);
+      scene = buildScene(cols, SCENE_ROWS, CELL_W / CELL_H);
       heat = new Float32Array(cols * SCENE_ROWS);
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
-      cv.width = Math.round(width * dpr);
-      cv.height = Math.round(SCENE_ROWS * CELL_H * dpr);
-      cv.style.height = `${SCENE_ROWS * CELL_H}px`;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.font = `${FONT_PX}px ${family}`;
-      ctx.textBaseline = "top";
-      draw();
+      hot = new Set();
+      shimmer = scene.cells.flatMap((c, i) => (c.tone === "shine" ? [i] : []));
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      for (const c of [cv, plate]) {
+        c.width = Math.round(width * dpr);
+        c.height = Math.round(height * dpr);
+      }
+      cv.style.height = `${height}px`;
+      const pc = plate.getContext("2d")!;
+      for (const c of [ctx, pc]) {
+        c.setTransform(dpr, 0, 0, dpr, 0, 0);
+        c.font = `${FONT_PX}px ${family}`;
+        c.textBaseline = "top";
+      }
+      scene.cells.forEach((cell, i) => {
+        if (cell.ch === " ") return;
+        const [color, alpha] = COLOR[cell.tone];
+        paint(pc, i, cell.ch, color, alpha * (0.5 + 0.5 * cell.ink));
+      });
+      draw(0);
     };
 
-    const draw = () => {
-      const { cols, rows, cells, ground } = scene;
-      const offsetX = (el.clientWidth - cols * CELL_W) / 2;
-      ctx.clearRect(0, 0, el.clientWidth, rows * CELL_H);
+    const draw = (frame: number) => {
+      const { cols, rows, cells } = scene;
+      const width = el.clientWidth;
       const total = cols * rows;
       const shown = Math.min(total, revealed);
-      for (let i = 0; i < shown; i++) {
-        const x = i % cols;
-        const y = (i / cols) | 0;
-        let { ch } = cells[i];
-        const tone = cells[i].tone;
-        const h = heat[i];
-        if (tone === "water" && !still) ch = "~-~ ~ -~"[(x + y * 3 + ((frame / 5) | 0)) % 8];
-        if (ch === "v" && !still && ((frame / 12) | 0) % 2 === (x % 2)) ch = "^"; // birds flap
-        if (h > 0.08 && Math.random() < h) ch = SPARK[(Math.random() * SPARK.length) | 0];
-        else if (ch === " ") continue;
-        if (h > 0.08) {
-          ctx.fillStyle = h > 0.55 ? "#ecfeff" : "#a5f3fc";
-          ctx.shadowColor = "#22d3ee";
-          ctx.shadowBlur = 10 * h;
-        } else {
-          ctx.fillStyle = COLOR[tone];
-          ctx.shadowBlur = tone === "stone" || tone === "sun" ? 5 : 0;
-          ctx.shadowColor = tone === "sun" ? "#fbbf24" : "#22d3ee";
-        }
-        ctx.fillText(ch, offsetX + x * CELL_W, y * CELL_H - (h > 0.08 ? h * 2 : 0));
-        if (y > ground + 6) break;
-      }
-      // the typing cursor
+      const fullRows = (shown / cols) | 0;
+      ctx.globalAlpha = 1;
+      ctx.clearRect(0, 0, width, height);
+      // everything typed so far: whole rows, then the part of the row the cursor is on
+      const blit = (x: number, y: number, w: number, h: number) => w > 0 && h > 0 && ctx.drawImage(plate, x * dpr, y * dpr, w * dpr, h * dpr, x, y, w, h);
+      blit(0, 0, width, fullRows * CELL_H);
       if (shown < total) {
-        ctx.shadowBlur = 12;
-        ctx.shadowColor = "#22d3ee";
-        ctx.fillStyle = "#ecfeff";
-        ctx.fillRect(offsetX + (shown % cols) * CELL_W, ((shown / cols) | 0) * CELL_H, CELL_W, CELL_H - 2);
+        blit(0, fullRows * CELL_H, (shown % cols) * CELL_W, CELL_H);
+        ctx.fillStyle = "#eef2ff";
+        ctx.fillRect((shown % cols) * CELL_W, fullRows * CELL_H, CELL_W, CELL_H);
       }
-      ctx.shadowBlur = 0;
+      const redraw = (i: number, ch: string, color: string, alpha: number) => {
+        ctx.clearRect((i % cols) * CELL_W, ((i / cols) | 0) * CELL_H, CELL_W, CELL_H);
+        paint(ctx, i, ch, color, alpha);
+      };
+      // the sun's path on the water flickers
+      if (!still) {
+        for (const i of shimmer) {
+          if (i >= shown || hash3(i, frame >> 2) > 0.3) continue;
+          redraw(i, "~=-*"[(hash3(i, frame) * 4) | 0], COLOR.shine[0], 0.55 + 0.45 * hash3(frame, i));
+        }
+      }
+      // characters the pointer has stirred up
+      for (const i of hot) {
+        const h = heat[i];
+        if (i >= shown) continue;
+        const cell = cells[i];
+        const stirred = Math.random() < h;
+        const ch = stirred ? SPARK[(Math.random() * SPARK.length) | 0] : cell.ch === " " ? RAMP[1 + ((h * 4) | 0)] : cell.ch;
+        const warm = cell.tone === "sun" || cell.tone === "shine" || cell.tone === "glow";
+        redraw(i, ch, h > 0.5 ? "#ffffff" : warm ? "#ffc2ad" : "#cdd8ff", Math.min(1, 0.35 + h));
+      }
+      ctx.globalAlpha = 1;
     };
 
+    let frame = 0;
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
       if (!visible || now - last < 33) return; // ~30 frames a second, and only while on screen
       last = now;
       frame++;
       const { cols, rows } = scene;
-      if (revealed < cols * rows) revealed += Math.ceil((cols * rows) / 75); // about 2.5 seconds to type the scene
+      if (revealed < cols * rows) revealed += Math.ceil((cols * rows) / 80); // about 2.7 seconds to type the scene
       if (pointer) {
         const px = pointer.x / CELL_W;
         const py = pointer.y / CELL_H;
-        for (let y = Math.max(0, Math.floor(py - REACH)); y < Math.min(rows, py + REACH); y++) {
+        const reachY = (REACH * CELL_W) / CELL_H;
+        for (let y = Math.max(0, Math.floor(py - reachY)); y < Math.min(rows, py + reachY); y++) {
           for (let x = Math.max(0, Math.floor(px - REACH)); x < Math.min(cols, px + REACH); x++) {
-            const d = Math.hypot(x + 0.5 - px, (y + 0.5 - py) * 1.7);
-            if (d < REACH) heat[y * cols + x] = Math.max(heat[y * cols + x], 1 - d / REACH);
+            const d = Math.hypot(x + 0.5 - px, ((y + 0.5 - py) * CELL_H) / CELL_W);
+            if (d >= REACH) continue;
+            const i = y * cols + x;
+            heat[i] = Math.max(heat[i], 1 - d / REACH);
+            hot.add(i);
           }
         }
       }
-      for (let i = 0; i < heat.length; i++) heat[i] *= 0.9;
-      draw();
+      for (const i of hot) {
+        heat[i] *= 0.9;
+        if (heat[i] < 0.06) {
+          heat[i] = 0;
+          hot.delete(i);
+        }
+      }
+      draw(frame);
     };
 
     const move = (e: PointerEvent) => {
       const r = cv.getBoundingClientRect();
-      const offsetX = (el.clientWidth - scene.cols * CELL_W) / 2;
-      pointer = { x: e.clientX - r.left - offsetX, y: e.clientY - r.top };
+      pointer = { x: e.clientX - r.left, y: e.clientY - r.top };
     };
     const leave = () => (pointer = null);
 
@@ -141,4 +186,10 @@ export function AsciiScene() {
       <canvas ref={canvas} className="block w-full touch-pan-y font-mono" />
     </div>
   );
+}
+
+/** Cheap repeatable randomness for the shimmer, so it does not depend on Math.random's rhythm. */
+function hash3(a: number, b: number) {
+  const n = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+  return n - Math.floor(n);
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { openDb, uniqueSlug } from "../lib/db";
 import { LENGTHS, activityGrid, cleanSvg, dailyPlan, inspectSvg, fitMinutes, isWeak, matchConcept, nextMastery, progressPercent, reviewCard, slugify, streak, toneInstruction } from "../lib/logic";
 import { extractJson } from "../lib/llm";
-import { SCENE_ROWS, buildScene, sceneText } from "../lib/ascii";
+import { RAMP, SCENE_ROWS, buildScene, sceneText } from "../lib/ascii";
 
 describe("mastery", () => {
   it("first answer sets mastery, later answers move it halfway", () => {
@@ -162,25 +162,35 @@ describe("database", () => {
 });
 
 describe("ascii scene", () => {
-  it("fits any width exactly", () => {
-    for (const cols of [32, 46, 80, 120, 150]) {
+  const toneAt = (cols: number, u: number, v: number) => {
+    const scene = buildScene(cols);
+    return scene.cells[Math.floor(v * scene.rows) * scene.cols + Math.floor(u * scene.cols)].tone;
+  };
+  it("fills any width exactly, using only the ink ramp", () => {
+    for (const cols of [24, 93, 183, 343, 460]) {
       const lines = sceneText(buildScene(cols)).split("\n");
       expect(lines).toHaveLength(SCENE_ROWS);
-      expect(lines.every((l) => l.length === cols)).toBe(true);
+      expect(lines.every((l) => l.length === cols && [...l].every((ch) => RAMP.includes(ch)))).toBe(true);
     }
   });
-  it("is nature only: a peak, the great pine and a river, with no building shapes", () => {
-    for (const cols of [32, 80, 150]) {
-      const text = sceneText(buildScene(cols));
-      expect(text).toContain("/\\"); // a summit
-      expect(text).toContain(".-~~~~~~~-."); // the great pine's crown
-      expect(text.split("\n").at(-1)).toMatch(/~/); // water along the bottom
-      expect(text).not.toMatch(/[\[\]=#+]/); // windows, walls, roofs, bridges
+  it("is composed like the reference: clear sky, a sun on the horizon, a river below it, trees at both sides", () => {
+    for (const cols of [93, 343]) {
+      expect(toneAt(cols, 0.5, 0.05)).toBe("sky");
+      expect(toneAt(cols, 0.5, 0.55)).toBe("sun");
+      expect(["water", "shine"]).toContain(toneAt(cols, 0.5, 0.8));
+      expect(toneAt(cols, 0.01, 0.97)).toBe("tree");
+      expect(toneAt(cols, 0.99, 0.97)).toBe("tree");
+      const tones = new Set(buildScene(cols).cells.map((c) => c.tone));
+      for (const t of ["glow", "far", "mid", "land", "tree", "water", "shine"]) expect(tones.has(t as never)).toBe(true);
     }
   });
-  it("grows more trees as width grows", () => {
-    const crowns = (cols: number) => sceneText(buildScene(cols)).split("^").length;
-    expect(crowns(150)).toBeGreaterThan(crowns(46));
+  it("leaves the upper sky almost empty and the foreground dense", () => {
+    const scene = buildScene(343);
+    const inkOfRow = (r: number) => scene.cells.slice(r * scene.cols, (r + 1) * scene.cols).reduce((s, c) => s + c.ink, 0) / scene.cols;
+    expect(inkOfRow(scene.rows - 1)).toBeGreaterThan(0.6);
+    // the middle half of the top row is open sky between the trees
+    const top = scene.cells.slice(Math.floor(scene.cols * 0.3), Math.floor(scene.cols * 0.7));
+    expect(top.filter((c) => c.ch !== " ").length / top.length).toBeLessThan(0.05);
   });
 });
 

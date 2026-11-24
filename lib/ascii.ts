@@ -1,158 +1,125 @@
-// A Renaissance-style landscape drawn in characters: mountains, rolling hills, cypresses,
-// stone pines and olive trees above a river. Nature only, no buildings. The scene is composed
-// for whatever number of columns fits the screen, so nothing is ever cropped: narrow screens
-// get a peak, the great pine and a few cypresses; wide ones add more ranges, trees and clouds.
+// The footer landscape, as a tonal ASCII engraving: tall trees framing a river that runs to a
+// sunset between layered mountains. Nature only. The picture is computed, not stored: every
+// character cell asks `shade` how much ink falls on it and which layer it belongs to, and the
+// answer picks a character from a light-to-dark ramp. Because it is computed per cell it fills
+// any number of columns exactly, so nothing is ever cropped.
 
-export type Tone = "sky" | "hill" | "stone" | "tree" | "water" | "sun";
-export type Cell = { ch: string; tone: Tone };
-export type Scene = { cols: number; rows: number; cells: Cell[]; ground: number };
+export type Tone = "sky" | "glow" | "sun" | "far" | "mid" | "land" | "tree" | "water" | "shine";
+export type Cell = { ch: string; tone: Tone; ink: number };
+export type Scene = { cols: number; rows: number; cells: Cell[] };
 
-export const SCENE_ROWS = 24;
+export const SCENE_ROWS = 64;
+/** Characters from least to most ink. */
+export const RAMP = " .,:;-~=+*o%#@";
 
-const GREAT_PINE = [
-  "    .-~~~~~~~-.    ",
-  " .-(  ~  ~~  ~ )-. ",
-  "(  ~~   ~   ~~  ~ )",
-  " '-(_ ~~  ~  ~_)-' ",
-  "     '--\\ /--'     ",
-  "         | |       ",
-  "         | |       ",
-  "         | |       ",
-  "        /| |\\      ",
-];
+const HORIZON = 0.58;
 
-const STONE_PINE = [" .-~~~-. ", "( ~ ~ ~ )", " '-._.-' ", "    |    ", "    |    ", "    |    "];
-const CYPRESS_TALL = ["  ^  ", " /^\\ ", " |^| ", " |^| ", " |^| ", " \\^/ ", "  |  "];
-const CYPRESS_SMALL = [" ^ ", "/^\\", "|^|", "\\^/", " | "];
-const OLIVE = [" .oOo. ", "(OoOoO)", " 'oOo' ", "   Y   "];
-const BUSH = [".oOo.", "(ooo)"];
-const REEDS = ["\\|/", " | "];
-
-const CLOUD_BIG = ["    .--.      ", " .-(    ).-.  ", "(___.__)____) "];
-const CLOUD_SMALL = ["  .-.   ", " (   ). ", "(___)__)"];
-const SUN = ["  \\ | /  ", "   .-.   ", "- ( O ) -", "   '-'   ", "  / | \\  "];
-
-/** Deterministic 0..1 noise so the picture is the same on every render. */
-function noise(x: number, y: number) {
+function hash(x: number, y: number) {
   const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
   return n - Math.floor(n);
 }
+/** Smooth value noise, 0..1. */
+function noise(x: number, y: number) {
+  const xi = Math.floor(x), yi = Math.floor(y);
+  const xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+const fbm = (x: number, y: number) => noise(x, y) * 0.55 + noise(x * 2.1, y * 2.1) * 0.3 + noise(x * 4.3, y * 4.3) * 0.15;
+const bump = (u: number, centre: number, width: number) => Math.exp(-(((u - centre) / width) ** 2));
 
-export function buildScene(cols: number, rows = SCENE_ROWS): Scene {
-  cols = Math.max(32, Math.floor(cols));
-  const cells: Cell[] = Array.from({ length: cols * rows }, () => ({ ch: " ", tone: "sky" as Tone }));
-  const ground = rows - 5;
-  const at = (x: number, y: number) => cells[y * cols + x];
-  const put = (x: number, y: number, ch: string, tone: Tone) => {
-    if (x >= 0 && x < cols && y >= 0 && y < rows && ch !== " ") cells[y * cols + x] = { ch, tone };
-  };
-  const taken = new Uint8Array(cols); // columns already holding a tree
-  const free = (x: number, w: number) => {
-    if (x < 1 || x + w > cols - 1) return false;
-    for (let i = x - 1; i < x + w + 1; i++) if (taken[i]) return false;
-    return true;
-  };
-  /** Stamp a sprite with its bottom row on `base`. Each row is solid between its outermost characters. */
-  const stamp = (sprite: string[], x: number, base: number, tone: Tone, reserve = true) => {
-    sprite.forEach((line, i) => {
-      const y = base - (sprite.length - 1) + i;
-      const first = line.search(/\S/);
-      if (first < 0) return;
-      const last = line.trimEnd().length - 1;
-      for (let j = first; j <= last; j++) {
-        if (x + j < 0 || x + j >= cols || y < 0 || y >= rows) continue;
-        cells[y * cols + x + j] = { ch: line[j], tone };
-      }
-    });
-    if (reserve) for (let i = Math.max(0, x); i < Math.min(cols, x + sprite[0].length); i++) taken[i] = 1;
-  };
+// Trees are described in units of the picture's height, measured from the nearer side edge.
+type Tree = { trunks: [baseX: number, topX: number, topY: number][]; crowns: [x: number, y: number, r: number][] };
+const LEFT: Tree = {
+  trunks: [[0.1, 0.17, 0.2], [0.2, 0.22, 0.3], [0.05, 0.04, 0.36]],
+  crowns: [[0.13, 0.13, 0.14], [0.28, 0.17, 0.11], [0.04, 0.27, 0.1], [0.22, 0.31, 0.1], [0.36, 0.26, 0.07], [0.15, 0.43, 0.07], [0.3, 0.07, 0.07]],
+};
+const RIGHT: Tree = {
+  trunks: [[0.09, 0.13, 0.26], [0.17, 0.16, 0.36]],
+  crowns: [[0.1, 0.2, 0.13], [0.23, 0.27, 0.11], [0.05, 0.37, 0.09], [0.2, 0.13, 0.09], [0.31, 0.41, 0.07], [0.14, 0.5, 0.06]],
+};
 
-  const far = (x: number) => ground - 5 - Math.round(2.4 * Math.sin(x * 0.06 + 1) + 1.6 * Math.sin(x * 0.021 + 4));
-  const near = (x: number) => ground - 1 - Math.round(1.1 * Math.sin(x * 0.045 + 2.4) + 0.6 * Math.sin(x * 0.11));
-  const mid = Math.floor(cols / 2);
-
-  // sun and clouds
-  const sunX = Math.round(cols * 0.84) - 4;
-  if (cols >= 44) stamp(SUN, sunX, 5, "sun", false);
-  const cloudSpots: [number, number, string[]][] = [
-    [0.08, 3, CLOUD_BIG],
-    [0.56, 2, CLOUD_SMALL],
-    [0.3, 5, CLOUD_SMALL],
-    [0.68, 5, CLOUD_BIG],
-  ];
-  cloudSpots.slice(0, cols < 60 ? 1 : cols < 100 ? 2 : 4).forEach(([fx, base, sprite]) => {
-    const x = Math.round(cols * fx);
-    if (x + sprite[0].length < sunX - 2 || x > sunX + 11) stamp(sprite, x, base, "sky", false);
-  });
-
-  // mountains: a main peak just off centre, more ranges as width allows
-  const peaks: [number, number][] = [[mid - 6, 10]];
-  if (cols >= 60) peaks.push([mid + 14, 7]);
-  if (cols >= 90) peaks.push([mid - 30, 8], [mid + 36, 6]);
-  if (cols >= 130) peaks.push([mid - 54, 6], [mid + 58, 8]);
-  peaks.sort((a, b) => a[1] - b[1]); // tallest drawn last, in front
-  for (const [cx, h] of peaks) {
-    const base = ground - 4;
-    for (let i = 0; i < h; i++) {
-      const y = base - h + 1 + i;
-      for (let x = cx - i; x <= cx + i + 1; x++) {
-        if (x < 0 || x >= cols || y < 0) continue;
-        const edge = x === cx - i ? "/" : x === cx + i + 1 ? "\\" : " ";
-        // snow near the summit, sparse rock texture lower down
-        const inside = i < 3 ? (i > 0 && noise(x, y) > 0.35 ? "*" : " ") : noise(x * 5, y * 3) > 0.9 ? (x % 2 ? "." : "'") : " ";
-        cells[y * cols + x] = { ch: edge !== " " ? edge : inside, tone: i < 3 && edge === " " ? "sky" : "stone" };
-      }
+function inTree(tree: Tree, x: number, y: number, scale: number): number {
+  const px = x / scale;
+  const py = 1 - (1 - y) / scale; // scale about the ground, so smaller trees still stand on it
+  for (const [bx, tx, ty] of tree.trunks) {
+    if (py < ty || py > 0.99) continue;
+    const t = (py - ty) / (0.99 - ty);
+    const cx = tx + (bx - tx) * t * t + 0.008 * Math.sin(py * 22 + bx * 40);
+    if (Math.abs(px - cx) < 0.006 + 0.012 * t) return 1;
+  }
+  for (const [cx, cy, r] of tree.crowns) {
+    const d = Math.hypot(px - cx, (py - cy) * 1.15);
+    const edge = r * (0.72 + 0.55 * fbm(px * 16 + cx * 9, py * 16));
+    if (d < edge) {
+      const leaf = fbm(px * 46, py * 46);
+      if (leaf < 0.3) continue; // gaps where the sky shows through the leaves
+      return 0.5 + 0.5 * leaf * (1 - 0.35 * (d / edge));
     }
   }
+  return 0;
+}
 
-  // far hills in front of the mountains' feet
-  for (let x = 0; x < cols; x++) {
-    const f = far(x);
-    for (let y = f; y <= ground; y++) cells[y * cols + x] = { ch: " ", tone: "hill" };
-    put(x, f, far(x - 1) < f ? "\\" : far(x + 1) < f ? "/" : far(x - 1) > f ? "/" : "_", "hill");
-    for (let y = f + 1; y < ground; y++) if (noise(x * 3, y * 7) > 0.93) put(x, y, y % 2 ? "." : ",", "hill");
+/** How much ink (0..1) lands at a point, and which layer of the picture it belongs to. */
+export function shade(u: number, v: number, aspect: number): { ink: number; tone: Tone } {
+  const x = u * aspect;
+  const scale = Math.max(0.72, Math.min(1, aspect / 2.6));
+
+  // framing trees and the undergrowth at their feet come first: they stand in front of everything
+  const tree = Math.max(inTree(LEFT, x, v, scale), inTree(RIGHT, aspect - x, v, scale));
+  if (tree) return { ink: tree, tone: "tree" };
+  const brush = 0.93 - 0.17 * bump(u, 0, 0.22) - 0.17 * bump(u, 1, 0.2) + 0.035 * fbm(u * 14 * aspect, 3);
+  if (v > brush) return { ink: Math.min(1, 0.45 + (v - brush) * 4 + 0.45 * fbm(x * 30, v * 30) + (v > 0.965 ? 0.4 : 0)), tone: "tree" };
+
+  const dip = 1 - 0.7 * bump(u, 0.5, 0.1); // the ranges part where the sun sets
+  const far = HORIZON - (0.035 + 0.2 * bump(u, 0.8, 0.13) + 0.12 * bump(u, 0.16, 0.15) + 0.08 * bump(u, 0.35, 0.07) + 0.06 * bump(u, 0.64, 0.05) + 0.05 * fbm(u * 9, 1)) * dip;
+  const mid = HORIZON - (0.014 + 0.09 * bump(u, 0.07, 0.17) + 0.08 * bump(u, 0.93, 0.15) + 0.045 * bump(u, 0.7, 0.08) + 0.04 * bump(u, 0.28, 0.07) + 0.035 * fbm(u * 14, 5)) * (1 - 0.95 * bump(u, 0.5, 0.1));
+
+  if (v < HORIZON) {
+    const sx = 0.5 * aspect;
+    const sunDist = Math.hypot(x - sx, v - HORIZON);
+    // each range is hatched lightly, darker along its crest and its shaded folds
+    if (v > mid) return { ink: Math.min(0.9, 0.34 + (v - mid < 0.02 ? 0.3 : 0) + 0.4 * fbm(x * 14, v * 14)), tone: "mid" };
+    if (sunDist < 0.075) return { ink: 1, tone: "sun" };
+    if (v > far) return { ink: Math.min(0.75, 0.3 + (v - far < 0.02 ? 0.3 : 0) + 0.22 * fbm(x * 10 + v * 24, v * 18)), tone: "far" };
+    // sky: clear above, with thin streaks of sunset cloud low over the horizon
+    const streak = fbm(x * 4, v * 60) * Math.exp(-(((x - sx) / 1.1) ** 2)) * Math.exp(-((HORIZON - v) / 0.2));
+    if (streak > 0.24) return { ink: Math.min(0.8, (streak - 0.24) * 3 + 0.12), tone: "glow" };
+    return { ink: hash(Math.floor(x * 300), Math.floor(v * 300)) > 0.988 ? 0.1 : 0, tone: "sky" };
   }
 
-  // river bank and river
-  for (let x = 0; x < cols; x++) {
-    put(x, ground + 1, noise(x, 7) > 0.8 ? '"' : "_", "hill");
-    for (let y = ground + 2; y < rows; y++) put(x, y, "~-~ ~ -~"[(x + y * 3) % 8], "water");
+  // below the horizon: a river that widens towards the viewer, between two banks
+  const t = (v - HORIZON) / (1 - HORIZON);
+  const centre = 0.5 + 0.045 * Math.sin(t * 5.2 + 0.4) - 0.015 * t;
+  const half = 0.03 + 0.34 * t ** 1.25 + 0.03 * (fbm(v * 26, u < centre ? 1 : 9) - 0.5);
+  const off = Math.abs(u - centre);
+  if (off < half) {
+    const ripple = noise(x * 26, v * 190);
+    if (Math.abs(u - 0.5) < (0.014 + 0.035 * t) / Math.max(1, aspect / 2.6) + 0.004 && ripple > 0.4) return { ink: 0.55 + 0.4 * ripple, tone: "shine" };
+    return { ink: 0.12 + (ripple > 0.6 ? 0.3 : 0) + 0.12 * t, tone: "water" };
   }
+  // banks: clumps of trees and scrub that grow larger towards the viewer, darkest at the waterline
+  const near = 0.45 + t;
+  const clump = fbm((x * 15) / near, (v * 17) / near);
+  const copse = Math.max(0, Math.min(1, (clump - 0.42) * 5)); // round dark masses of trees
+  const shore = off - half < 0.008 ? 0.3 : 0;
+  return { ink: Math.min(1, 0.16 + 0.1 * t + 0.7 * copse + shore), tone: "land" };
+}
 
-  // the great stone pine stands on the bank at the centre
-  stamp(GREAT_PINE, Math.max(1, Math.min(mid + 2, cols - GREAT_PINE[0].length - 1)), ground + 1, "tree");
-
-  // other trees wherever a gap is left: pines, cypresses, olives, bushes
-  for (let x = 2; x < cols - 9; x++) {
-    const n = noise(x, 99);
-    if (n > 0.93 && cols >= 70 && free(x, 9)) stamp(STONE_PINE, x, ground + 1, "tree");
-    else if (n > 0.84 && free(x, 5)) stamp(CYPRESS_TALL, x, ground + 1, "tree");
-    else if (n > 0.74 && free(x, 3)) stamp(CYPRESS_SMALL, x, ground + 1, "tree");
-    else if (n > 0.66 && free(x, 7)) stamp(OLIVE, x, ground + 1, "tree");
-    else if (n > 0.6 && free(x, 5)) stamp(BUSH, x, ground + 1, "tree");
-  }
-
-  // the nearer slope, only in the open ground between trees
-  for (let x = 0; x < cols; x++) {
-    const n = near(x);
-    if (!taken[x] && at(x, n).ch === " ") put(x, n, near(x + 1) < n ? "/" : near(x - 1) < n ? "\\" : "-", "hill");
-  }
-
-  // reeds at the water's edge
-  for (let x = 3; x < cols - 4; x++) {
-    if (noise(x, 41) > 0.9 && !taken[x] && !taken[x + 1] && !taken[x + 2]) {
-      stamp(REEDS, x, ground + 2, "tree", false);
-      x += 6;
+export function buildScene(cols: number, rows = SCENE_ROWS, cellAspect = 0.55): Scene {
+  cols = Math.max(24, Math.floor(cols));
+  const aspect = (cols * cellAspect) / rows;
+  const cells: Cell[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const { ink, tone } = shade((c + 0.5) / cols, (r + 0.5) / rows, aspect);
+      // a little grain keeps flat areas from banding, like the dots of an engraving
+      const grained = ink <= 0 ? 0 : Math.max(0.05, Math.min(1, ink + (hash(c, r) - 0.5) * 0.3));
+      cells.push({ ch: RAMP[Math.round(grained * (RAMP.length - 1))], tone, ink: grained });
     }
   }
-
-  // a few birds in open sky
-  for (const [dx, dy] of [[-18, 2], [-14, 1], [22, 3], [26, 2]] as const) {
-    const bx = mid + dx;
-    if (bx > 1 && bx < cols - 2 && at(bx, dy).ch === " " && at(bx - 1, dy).ch === " " && at(bx + 1, dy).ch === " ") put(bx, dy, "v", "sky");
-  }
-
-  return { cols, rows, cells, ground };
+  return { cols, rows, cells };
 }
 
 /** Plain-text rendering, used in tests. */
