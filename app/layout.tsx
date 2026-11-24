@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { DebugToggle } from "@/components/debug";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -21,9 +22,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="font-display text-xl font-semibold text-brand-dark">
               Edu<span className="text-ink">Learn</span>
             </Link>
-            <Link href="/" className="text-sm text-muted hover:text-ink">
-              My courses
-            </Link>
+            <div className="flex items-center gap-4">
+              <DebugToggle />
+              <Link href="/" className="text-sm text-muted hover:text-ink">
+                My courses
+              </Link>
+            </div>
           </div>
         </header>
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">{children}</main>

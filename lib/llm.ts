@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { z } from "zod";
+import { traceStart } from "./trace";
 
 export const MODELS = {
   strong: process.env.LLM_MODEL_STRONG || "openai/gpt-oss-120b",
@@ -34,6 +35,8 @@ export function extractJson(text: string): unknown {
  * error is fed back to the model once before giving up.
  */
 export async function chatJson<T>(opts: {
+  /** Shown in the debug panel. */
+  label: string;
   schema: z.ZodType<T>;
   messages: Msg[];
   model?: keyof typeof MODELS;
@@ -43,18 +46,31 @@ export async function chatJson<T>(opts: {
   const messages = [...opts.messages];
   let lastError = "";
   for (let attempt = 0; attempt < 2; attempt++) {
-    const res = await getClient().chat.completions.create({
-      model: MODELS[opts.model ?? "fast"],
-      messages,
-      temperature: opts.temperature ?? 0.4,
-      max_tokens: opts.maxTokens ?? 8000,
-      response_format: { type: "json_object" },
-    });
-    const text = res.choices[0]?.message?.content ?? "";
+    const model = MODELS[opts.model ?? "fast"];
+    const done = traceStart("llm", attempt === 0 ? opts.label : `${opts.label} (retry after invalid reply)`, { model, prompt: promptText(messages) });
+    let text = "";
+    let usage = "";
     try {
-      return opts.schema.parse(extractJson(text));
+      const res = await getClient().chat.completions.create({
+        model,
+        messages,
+        temperature: opts.temperature ?? 0.4,
+        max_tokens: opts.maxTokens ?? 8000,
+        response_format: { type: "json_object" },
+      });
+      text = res.choices[0]?.message?.content ?? "";
+      usage = res.usage ? `${res.usage.prompt_tokens} tokens in, ${res.usage.completion_tokens} out` : "";
+    } catch (err) {
+      done("error", err instanceof Error ? err.message : String(err));
+      throw err;
+    }
+    try {
+      const parsed = opts.schema.parse(extractJson(text));
+      done("ok", [model, usage, "valid JSON"].filter(Boolean).join(" · "), { response: text });
+      return parsed;
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
+      done("error", `${model} · reply failed validation: ${lastError.slice(0, 200)}`, { response: text });
       messages.push(
         { role: "assistant", content: text },
         {
@@ -69,23 +85,45 @@ export async function chatJson<T>(opts: {
 
 /** Stream plain text; yields content deltas. */
 export async function* chatStream(opts: {
+  /** Shown in the debug panel. */
+  label: string;
   messages: Msg[];
   model?: keyof typeof MODELS;
   temperature?: number;
   maxTokens?: number;
 }): AsyncGenerator<string> {
-  const stream = await getClient().chat.completions.create({
-    model: MODELS[opts.model ?? "fast"],
-    messages: opts.messages,
-    temperature: opts.temperature ?? 0.5,
-    max_tokens: opts.maxTokens ?? 6000,
-    stream: true,
-  });
-  for await (const chunk of stream) {
-    const delta = chunk.choices[0]?.delta?.content;
-    if (delta) yield delta;
+  const model = MODELS[opts.model ?? "fast"];
+  const done = traceStart("llm", opts.label, { model, prompt: promptText(opts.messages) });
+  let full = "";
+  let finished = false;
+  try {
+    const stream = await getClient().chat.completions.create({
+      model,
+      messages: opts.messages,
+      temperature: opts.temperature ?? 0.5,
+      max_tokens: opts.maxTokens ?? 6000,
+      stream: true,
+    });
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content;
+      if (delta) {
+        full += delta;
+        yield delta;
+      }
+    }
+    finished = true;
+    done("ok", `${model} · streamed ${full.length} characters`, { response: full });
+  } catch (err) {
+    finished = true;
+    done("error", err instanceof Error ? err.message : String(err), { response: full });
+    throw err;
+  } finally {
+    // The reader went away (page closed) before the stream ended.
+    if (!finished) done("error", `${model} · stopped early after ${full.length} characters`, { response: full });
   }
 }
+
+const promptText = (messages: Msg[]) => messages.map((m) => `[${m.role}]\n${m.content}`).join("\n\n");
 
 /** Turn a text generator into a streamed HTTP response, calling onDone with the full text. */
 export function streamResponse(gen: AsyncGenerator<string>, onDone?: (full: string) => void) {

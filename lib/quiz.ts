@@ -4,6 +4,7 @@ import { getDb } from "./db";
 import { chatJson } from "./llm";
 import { WEAK_THRESHOLD, matchConcept, nextMastery, toneInstruction } from "./logic";
 import { touchSession } from "./session";
+import { traceNote } from "./trace";
 
 type Concept = { id: number; name: string; mastery: number | null };
 type QuestionRow = {
@@ -71,6 +72,7 @@ export async function createQuiz(req: QuizRequest): Promise<number> {
 
   const course = getCourseRow(courseId);
   const res = await chatJson({
+    label: `Write ${count} quiz questions on ${concepts.map((c) => c.name).join(", ")}`,
     schema: QuizSchema,
     model: "fast",
     messages: [
@@ -103,6 +105,7 @@ Rules:
       const concept = matchConcept(q.concept, concepts);
       insert.run(quizId, i, q.type, q.prompt, JSON.stringify(q.type === "mcq" ? q.options : []), q.type === "mcq" ? String(q.answer_index) : q.model_answer!, q.explanation, concept?.id ?? null);
     });
+    traceNote("db", "Save quiz", `quiz #${quizId}: ${valid.length} questions${valid.length < res.questions.length ? ` (${res.questions.length - valid.length} malformed ones dropped)` : ""}`);
     return quizId;
   })();
 }
@@ -147,6 +150,7 @@ export async function submitAttempt(quizId: number, responses: Record<string, st
   for (const q of shorts) if (!answered.includes(q)) graded.set(q.id, { correct: false, feedback: "No answer given." });
   if (answered.length) {
     const res = await chatJson({
+      label: `Grade ${answered.length} short answer${answered.length > 1 ? "s" : ""}`,
       schema: GradeSchema,
       model: "fast",
       temperature: 0,
@@ -171,6 +175,8 @@ export async function submitAttempt(quizId: number, responses: Record<string, st
   const correctCount = questions.filter((q) => graded.get(q.id)?.correct).length;
   const score = questions.length ? correctCount / questions.length : 0;
 
+  const moves: string[] = [];
+  const pct = (m: number) => `${Math.round(m * 100)}%`;
   const attemptId = db.transaction(() => {
     const id = Number(db.prepare("INSERT INTO attempts (quiz_id, score) VALUES (?, ?)").run(quizId, score).lastInsertRowid);
     const insertAnswer = db.prepare("INSERT INTO answers (attempt_id, question_id, response, is_correct, feedback) VALUES (?,?,?,?,?)");
@@ -178,14 +184,17 @@ export async function submitAttempt(quizId: number, responses: Record<string, st
       const g = graded.get(q.id)!;
       insertAnswer.run(id, q.id, String(responses[q.id] ?? "").slice(0, 2000), g.correct ? 1 : 0, g.feedback);
       if (q.concept_id === null) continue;
-      const c = db.prepare("SELECT mastery FROM concepts WHERE id = ?").get(q.concept_id) as { mastery: number | null } | undefined;
+      const c = db.prepare("SELECT name, mastery FROM concepts WHERE id = ?").get(q.concept_id) as { name: string; mastery: number | null } | undefined;
       if (!c) continue;
+      const after = nextMastery(c.mastery, g.correct);
+      moves.push(`${c.name}: ${c.mastery === null ? "untested" : pct(c.mastery)} → ${pct(after)}${after < WEAK_THRESHOLD ? " (weak)" : ""}`);
       db.prepare(
         `UPDATE concepts SET mastery = ?, correct = correct + ?, incorrect = incorrect + ?, last_seen_at = datetime('now') WHERE id = ?`,
-      ).run(nextMastery(c.mastery, g.correct), g.correct ? 1 : 0, g.correct ? 0 : 1, q.concept_id);
+      ).run(after, g.correct ? 1 : 0, g.correct ? 0 : 1, q.concept_id);
     }
     return id;
   })();
+  traceNote("db", "Save quiz attempt and update mastery", `${correctCount}/${questions.length} correct (multiple choice graded locally)`, { mastery_changes: moves.join("\n") });
   // Finishing a lesson's quiz completes the lesson.
   if (quiz.kind === "lesson" && quiz.lesson_id) setLessonCompleted(quiz.lesson_id, true);
   touchSession(quiz.course_id, { quizzes: 1 });

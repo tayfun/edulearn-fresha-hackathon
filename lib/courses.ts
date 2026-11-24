@@ -4,6 +4,7 @@ import { chatJson, chatStream } from "./llm";
 import { LENGTHS, LengthPreset, WEAK_THRESHOLD, dailyPlan, fitMinutes, progressPercent, toneInstruction } from "./logic";
 import { courseStreak, listSessions, touchSession } from "./session";
 import { webSearch } from "./tavily";
+import { traceNote } from "./trace";
 
 export class NotFound extends Error {}
 
@@ -28,6 +29,7 @@ const IntakeSchema = z.object({
 /** Topic-specific clarifying questions shown in the intake wizard. */
 export async function intakeQuestions(topic: string) {
   const res = await chatJson({
+    label: `Write clarifying questions for "${topic}"`,
     schema: IntakeSchema,
     messages: [
       {
@@ -72,8 +74,9 @@ export type CourseInput = {
 
 export async function createCourse(input: CourseInput): Promise<number> {
   const preset = LENGTHS[input.length];
-  const grounding = await webSearch(`${input.topic} ${input.goal}`.trim() + " learning roadmap syllabus", 5);
+  const grounding = await webSearch(`${input.topic} learning roadmap syllabus`, 5);
   const outline = await chatJson({
+    label: `Design the curriculum (${preset.label} course, ${preset.lessons} lesson${preset.lessons === 1 ? "" : "s"})`,
     schema: OutlineSchema,
     model: "strong",
     maxTokens: 12000,
@@ -139,6 +142,7 @@ ${grounding.length ? `\nWeb search results for grounding (use to judge what matt
     return { courseId, moduleIds };
   });
   const { courseId, moduleIds } = save();
+  traceNote("db", "Save curriculum", `course #${courseId}: ${moduleIds.length} modules, ${flat.length} lessons, ${new Set(flat.flatMap((l) => l.concepts.map((c) => c.trim().toLowerCase()))).size} concepts to track`);
 
   // Resources per module; a failed search just leaves that module without links.
   const found = await Promise.all(moduleIds.map((m) => webSearch(`${input.topic}: ${m.title} tutorial guide`, 3)));
@@ -153,6 +157,7 @@ ${grounding.length ? `\nWeb search results for grounding (use to judge what matt
       }
     });
   })();
+  traceNote("db", "Save web resources", `${seen.size} links across ${moduleIds.length} modules`);
   touchSession(courseId);
   return courseId;
 }
@@ -281,6 +286,7 @@ export function lessonContentStream(id: number) {
   const words = Math.min(1100, Math.max(250, lesson.est_minutes * 70));
   touchSession(course.id);
   return chatStream({
+    label: `Write lesson "${lesson.title}" (~${words} words, ${course.tone})`,
     model: "lesson",
     maxTokens: 5000,
     messages: [
@@ -310,12 +316,14 @@ ${resources.length ? `\nBackground from web sources (for accuracy; do not quote 
 
 export function saveLessonContent(id: number, content: string) {
   getDb().prepare("UPDATE lessons SET content = ? WHERE id = ?").run(content.trim(), id);
+  traceNote("db", "Save lesson content", `lesson #${id}, ${content.trim().length} characters; later visits read it from the database`);
 }
 
 export function setLessonCompleted(id: number, completed: boolean) {
   const lesson = getLessonRow(id);
   if (completed && !lesson.completed_at) {
     getDb().prepare("UPDATE lessons SET completed_at = datetime('now') WHERE id = ?").run(id);
+    traceNote("db", "Mark lesson complete", `"${lesson.title}"`);
     touchSession(lesson.course_id, { lessons: 1 });
   } else if (!completed && lesson.completed_at) {
     getDb().prepare("UPDATE lessons SET completed_at = NULL WHERE id = ?").run(id);
@@ -332,6 +340,7 @@ export function tutorStream(lessonId: number, message: string) {
   db.prepare("INSERT INTO tutor_messages (lesson_id, role, content) VALUES (?, 'user', ?)").run(lessonId, message);
   touchSession(course.id);
   return chatStream({
+    label: `Tutor answers: "${message.slice(0, 80)}"`,
     model: "fast",
     maxTokens: 1500,
     messages: [

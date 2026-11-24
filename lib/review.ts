@@ -6,6 +6,7 @@ import { matchConcept, reviewCard, toneInstruction } from "./logic";
 import { weakConcepts } from "./quiz";
 import { touchSession } from "./session";
 import { webSearch } from "./tavily";
+import { traceNote } from "./trace";
 
 type ConceptStat = { id: number; name: string; mastery: number | null; correct: number; incorrect: number; last_seen_at: string | null };
 
@@ -65,6 +66,7 @@ export async function generateRecommendations(courseId: number) {
 
   const searches = await Promise.all(targets.map((c) => webSearch(`${c.name} ${course.topic} explained with examples`, 3)));
   const res = await chatJson({
+    label: `Diagnose and advise on ${targets.map((c) => c.name).join(", ")}`,
     schema: RecSchema,
     model: "fast",
     messages: [
@@ -102,6 +104,7 @@ Speak directly to the learner ("you"). Style: ${toneInstruction(course.tone)}`,
       }
     });
   })();
+  traceNote("db", "Save recommendations", `${targets.length} weak concept${targets.length > 1 ? "s" : ""}, ${searches.flat().length} web resources`);
   return targets.length;
 }
 
@@ -120,6 +123,7 @@ export async function generateFlashcards(courseId: number) {
   const existing = db.prepare("SELECT front FROM flashcards WHERE course_id = ?").all(courseId) as { front: string }[];
 
   const res = await chatJson({
+    label: `Write flashcards for ${targets.map((c) => c.name).join(", ")}`,
     schema: CardSchema,
     model: "fast",
     messages: [
@@ -143,6 +147,7 @@ Write 3 cards per concept: one that states the core idea, one that targets the m
   db.transaction(() => {
     for (const card of res.cards) insert.run(courseId, matchConcept(card.concept, targets)?.id ?? null, card.front, card.back);
   })();
+  traceNote("db", "Save flashcards", `${res.cards.length} new cards in box 1, due now`);
   return res.cards.length;
 }
 
@@ -164,6 +169,7 @@ export function reviewFlashcard(cardId: number, knewIt: boolean) {
   if (!card) return null;
   const next = reviewCard(card.box, knewIt);
   db.prepare("UPDATE flashcards SET box = ?, due_at = ?, reviews = reviews + 1 WHERE id = ?").run(next.box, next.dueAt, cardId);
+  traceNote("db", "Reschedule flashcard", `card #${cardId}: box ${card.box} → ${next.box}, next due ${next.dueAt} UTC`);
   touchSession(card.course_id, { cards: 1 });
   return next;
 }

@@ -35,6 +35,16 @@ persistent disk.
   for multi-day courses, and a log of study sessions with the weak spots at
   the end of each.
 
+## Debug mode
+
+Switch on **Debug** in the header to open a live activity panel: every model
+call (purpose, model, tokens, duration), web search (query and results) and
+database write, as it happens. Click a row to see the full prompt and reply.
+The switch is remembered per browser. The log is the server's last 300 events,
+held in memory, so it resets on restart.
+
+Set `EDULEARN_DEBUG=1` to also print each event to the server console.
+
 ## Stack
 
 Next.js (App Router) + TypeScript + Tailwind, SQLite via `better-sqlite3`,
