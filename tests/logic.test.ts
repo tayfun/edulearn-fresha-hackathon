@@ -162,19 +162,25 @@ describe("database", () => {
 });
 
 describe("ascii scene", () => {
-  it("fits any width exactly, with the dome in the middle", () => {
+  it("fits any width exactly", () => {
     for (const cols of [32, 46, 80, 120, 150]) {
-      const scene = buildScene(cols);
-      const lines = sceneText(scene).split("\n");
+      const lines = sceneText(buildScene(cols)).split("\n");
       expect(lines).toHaveLength(SCENE_ROWS);
       expect(lines.every((l) => l.length === cols)).toBe(true);
-      // the lantern cross on top of the dome sits on the centre column
-      expect(lines.some((l) => l[Math.floor(cols / 2)] === "+" || l[Math.floor(cols / 2) - 1] === "+")).toBe(true);
     }
   });
-  it("adds the bell tower and more buildings as width grows", () => {
-    const count = (cols: number) => sceneText(buildScene(cols)).split("[]").length;
-    expect(count(120)).toBeGreaterThan(count(46));
+  it("is nature only: a peak, the great pine and a river, with no building shapes", () => {
+    for (const cols of [32, 80, 150]) {
+      const text = sceneText(buildScene(cols));
+      expect(text).toContain("/\\"); // a summit
+      expect(text).toContain(".-~~~~~~~-."); // the great pine's crown
+      expect(text.split("\n").at(-1)).toMatch(/~/); // water along the bottom
+      expect(text).not.toMatch(/[\[\]=#+]/); // windows, walls, roofs, bridges
+    }
+  });
+  it("grows more trees as width grows", () => {
+    const crowns = (cols: number) => sceneText(buildScene(cols)).split("^").length;
+    expect(crowns(150)).toBeGreaterThan(crowns(46));
   });
 });
 

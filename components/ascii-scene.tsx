@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { SCENE_ROWS, Scene, Tone, buildScene } from "@/lib/ascii";
 
-const COLOR: Record<Tone, string> = { sky: "#4b6b8a", hill: "#1f7d94", stone: "#67e8f9", tree: "#2dd4bf", water: "#1795b3", sun: "#fbbf24" };
+const COLOR: Record<Tone, string> = { sky: "#6f8fae", hill: "#1f7d94", stone: "#67e8f9", tree: "#2dd4bf", water: "#1795b3", sun: "#fbbf24" };
 const SPARK = "@#%&$*+=<>/\\|";
 const CELL_W = 8.4;
 const CELL_H = 15;
@@ -11,9 +11,10 @@ const FONT_PX = 14;
 const REACH = 4.5; // how far, in cells, the pointer disturbs the picture
 
 /**
- * The footer artwork: a Renaissance townscape in ASCII. A block cursor types it in when it first
- * scrolls into view; after that the water moves, the stars flicker, and the pointer scrambles and
- * lights up the characters it passes over, which then settle back.
+ * The footer artwork: a Renaissance-style landscape in ASCII (mountains, hills, pines, cypresses
+ * and a river; no buildings). A block cursor types it in when it first scrolls into view; after
+ * that the water moves and the pointer scrambles and lights up the characters it passes over,
+ * which then settle back.
  */
 export function AsciiScene() {
   const wrap = useRef<HTMLDivElement>(null);
@@ -62,7 +63,7 @@ export function AsciiScene() {
         const tone = cells[i].tone;
         const h = heat[i];
         if (tone === "water" && !still) ch = "~-~ ~ -~"[(x + y * 3 + ((frame / 5) | 0)) % 8];
-        if (tone === "sky" && ch !== " " && ch !== "v" && !still && (x * 7 + y * 13 + ((frame / 14) | 0)) % 9 === 0) ch = ch === "." ? "+" : ".";
+        if (ch === "v" && !still && ((frame / 12) | 0) % 2 === (x % 2)) ch = "^"; // birds flap
         if (h > 0.08 && Math.random() < h) ch = SPARK[(Math.random() * SPARK.length) | 0];
         else if (ch === " ") continue;
         if (h > 0.08) {

@@ -1,6 +1,7 @@
-// A Renaissance townscape drawn in characters. The scene is composed for whatever number of
-// columns fits the screen, so nothing is ever cropped: narrow screens get the dome and a few
-// cypresses, wide ones add the bell tower, an arcade, a bridge and more hills.
+// A Renaissance-style landscape drawn in characters: mountains, rolling hills, cypresses,
+// stone pines and olive trees above a river. Nature only, no buildings. The scene is composed
+// for whatever number of columns fits the screen, so nothing is ever cropped: narrow screens
+// get a peak, the great pine and a few cypresses; wide ones add more ranges, trees and clouds.
 
 export type Tone = "sky" | "hill" | "stone" | "tree" | "water" | "sun";
 export type Cell = { ch: string; tone: Tone };
@@ -8,58 +9,30 @@ export type Scene = { cols: number; rows: number; cells: Cell[]; ground: number 
 
 export const SCENE_ROWS = 24;
 
-const DOME = [
-  "              +              ",
-  "              |              ",
-  "             /_\\             ",
-  "            |[_]|            ",
-  "          _.-'''-._          ",
-  "        .'  / | \\  '.        ",
-  "       /   /  |  \\   \\       ",
-  "      /   |   |   |   \\      ",
-  "     |    |   |   |    |     ",
-  "    _|____|___|___|____|_    ",
-  "   [_____________________]   ",
-  "    |  _  |  /^\\  |  _  |    ",
-  "    | (_) |  |_|  | (_) |    ",
-  "  __|_____|__|_|__|_____|__  ",
-  " |___|___|___|_|___|___|___| ",
+const GREAT_PINE = [
+  "    .-~~~~~~~-.    ",
+  " .-(  ~  ~~  ~ )-. ",
+  "(  ~~   ~   ~~  ~ )",
+  " '-(_ ~~  ~  ~_)-' ",
+  "     '--\\ /--'     ",
+  "         | |       ",
+  "         | |       ",
+  "         | |       ",
+  "        /| |\\      ",
 ];
 
-const TOWER = [
-  "  /\\  ",
-  " /__\\ ",
-  " |[]| ",
-  " |  | ",
-  " |::| ",
-  " |  | ",
-  " |[]| ",
-  " |  | ",
-  " |::| ",
-  " |  | ",
-  " |[]| ",
-  " |  | ",
-  " |/\\| ",
-  "_|||||_",
-];
-
+const STONE_PINE = [" .-~~~-. ", "( ~ ~ ~ )", " '-._.-' ", "    |    ", "    |    ", "    |    "];
 const CYPRESS_TALL = ["  ^  ", " /^\\ ", " |^| ", " |^| ", " |^| ", " \\^/ ", "  |  "];
 const CYPRESS_SMALL = [" ^ ", "/^\\", "|^|", "\\^/", " | "];
+const OLIVE = [" .oOo. ", "(OoOoO)", " 'oOo' ", "   Y   "];
+const BUSH = [".oOo.", "(ooo)"];
+const REEDS = ["\\|/", " | "];
 
-const HOUSE = [
-  "   ______   ",
-  "  /______\\  ",
-  " /________\\ ",
-  " | [] [] |  ",
-  " | [] /\\ |  ",
-  " |____||_|  ",
-];
-
-const ARCADE_UNIT = ["_______", "  ___  ", " /   \\ ", "|     |", "|     |"];
-
+const CLOUD_BIG = ["    .--.      ", " .-(    ).-.  ", "(___.__)____) "];
+const CLOUD_SMALL = ["  .-.   ", " (   ). ", "(___)__)"];
 const SUN = ["  \\ | /  ", "   .-.   ", "- ( O ) -", "   '-'   ", "  / | \\  "];
 
-/** Deterministic 0..1 noise so the sky looks the same on every render. */
+/** Deterministic 0..1 noise so the picture is the same on every render. */
 function noise(x: number, y: number) {
   const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
   return n - Math.floor(n);
@@ -69,109 +42,119 @@ export function buildScene(cols: number, rows = SCENE_ROWS): Scene {
   cols = Math.max(32, Math.floor(cols));
   const cells: Cell[] = Array.from({ length: cols * rows }, () => ({ ch: " ", tone: "sky" as Tone }));
   const ground = rows - 5;
+  const at = (x: number, y: number) => cells[y * cols + x];
   const put = (x: number, y: number, ch: string, tone: Tone) => {
     if (x >= 0 && x < cols && y >= 0 && y < rows && ch !== " ") cells[y * cols + x] = { ch, tone };
   };
-  const taken = new Uint8Array(cols); // columns already holding a building or tree
+  const taken = new Uint8Array(cols); // columns already holding a tree
   const free = (x: number, w: number) => {
     if (x < 1 || x + w > cols - 1) return false;
     for (let i = x - 1; i < x + w + 1; i++) if (taken[i]) return false;
     return true;
   };
-  /** Stamp a sprite with its bottom row on `base`; inner spaces stay see-through only at the edges. */
-  const stamp = (sprite: string[], x: number, base: number, tone: Tone) => {
+  /** Stamp a sprite with its bottom row on `base`. Each row is solid between its outermost characters. */
+  const stamp = (sprite: string[], x: number, base: number, tone: Tone, reserve = true) => {
     sprite.forEach((line, i) => {
       const y = base - (sprite.length - 1) + i;
       const first = line.search(/\S/);
-      const last = line.length - 1 - [...line].reverse().join("").search(/\S/);
-      for (let j = first; j <= last && first >= 0; j++) {
+      if (first < 0) return;
+      const last = line.trimEnd().length - 1;
+      for (let j = first; j <= last; j++) {
         if (x + j < 0 || x + j >= cols || y < 0 || y >= rows) continue;
         cells[y * cols + x + j] = { ch: line[j], tone };
       }
     });
-    for (let i = Math.max(0, x); i < Math.min(cols, x + sprite[0].length); i++) taken[i] = 1;
+    if (reserve) for (let i = Math.max(0, x); i < Math.min(cols, x + sprite[0].length); i++) taken[i] = 1;
   };
 
-  // sky
-  for (let y = 0; y < ground - 6; y++) {
-    for (let x = 0; x < cols; x++) {
-      const n = noise(x, y);
-      if (n > 0.972) put(x, y, n > 0.992 ? "*" : n > 0.983 ? "+" : ".", "sky");
+  const far = (x: number) => ground - 5 - Math.round(2.4 * Math.sin(x * 0.06 + 1) + 1.6 * Math.sin(x * 0.021 + 4));
+  const near = (x: number) => ground - 1 - Math.round(1.1 * Math.sin(x * 0.045 + 2.4) + 0.6 * Math.sin(x * 0.11));
+  const mid = Math.floor(cols / 2);
+
+  // sun and clouds
+  const sunX = Math.round(cols * 0.84) - 4;
+  if (cols >= 44) stamp(SUN, sunX, 5, "sun", false);
+  const cloudSpots: [number, number, string[]][] = [
+    [0.08, 3, CLOUD_BIG],
+    [0.56, 2, CLOUD_SMALL],
+    [0.3, 5, CLOUD_SMALL],
+    [0.68, 5, CLOUD_BIG],
+  ];
+  cloudSpots.slice(0, cols < 60 ? 1 : cols < 100 ? 2 : 4).forEach(([fx, base, sprite]) => {
+    const x = Math.round(cols * fx);
+    if (x + sprite[0].length < sunX - 2 || x > sunX + 11) stamp(sprite, x, base, "sky", false);
+  });
+
+  // mountains: a main peak just off centre, more ranges as width allows
+  const peaks: [number, number][] = [[mid - 6, 10]];
+  if (cols >= 60) peaks.push([mid + 14, 7]);
+  if (cols >= 90) peaks.push([mid - 30, 8], [mid + 36, 6]);
+  if (cols >= 130) peaks.push([mid - 54, 6], [mid + 58, 8]);
+  peaks.sort((a, b) => a[1] - b[1]); // tallest drawn last, in front
+  for (const [cx, h] of peaks) {
+    const base = ground - 4;
+    for (let i = 0; i < h; i++) {
+      const y = base - h + 1 + i;
+      for (let x = cx - i; x <= cx + i + 1; x++) {
+        if (x < 0 || x >= cols || y < 0) continue;
+        const edge = x === cx - i ? "/" : x === cx + i + 1 ? "\\" : " ";
+        // snow near the summit, sparse rock texture lower down
+        const inside = i < 3 ? (i > 0 && noise(x, y) > 0.35 ? "*" : " ") : noise(x * 5, y * 3) > 0.9 ? (x % 2 ? "." : "'") : " ";
+        cells[y * cols + x] = { ch: edge !== " " ? edge : inside, tone: i < 3 && edge === " " ? "sky" : "stone" };
+      }
     }
   }
 
-  // two ranges of hills
-  const far = (x: number) => ground - 5 - Math.round(2.4 * Math.sin(x * 0.06 + 1) + 1.6 * Math.sin(x * 0.021 + 4));
-  const near = (x: number) => ground - 1 - Math.round(1.1 * Math.sin(x * 0.045 + 2.4) + 0.6 * Math.sin(x * 0.11));
+  // far hills in front of the mountains' feet
   for (let x = 0; x < cols; x++) {
     const f = far(x);
+    for (let y = f; y <= ground; y++) cells[y * cols + x] = { ch: " ", tone: "hill" };
     put(x, f, far(x - 1) < f ? "\\" : far(x + 1) < f ? "/" : far(x - 1) > f ? "/" : "_", "hill");
     for (let y = f + 1; y < ground; y++) if (noise(x * 3, y * 7) > 0.93) put(x, y, y % 2 ? "." : ",", "hill");
   }
 
-  // ground and river
+  // river bank and river
   for (let x = 0; x < cols; x++) {
-    put(x, ground + 1, "_", "stone");
+    put(x, ground + 1, noise(x, 7) > 0.8 ? '"' : "_", "hill");
     for (let y = ground + 2; y < rows; y++) put(x, y, "~-~ ~ -~"[(x + y * 3) % 8], "water");
   }
 
-  // sun, high on the right
-  if (cols >= 44) stamp(SUN, Math.round(cols * 0.84) - 4, 5, "sun");
-  taken.fill(0);
+  // the great stone pine stands on the bank at the centre
+  stamp(GREAT_PINE, Math.max(1, Math.min(mid + 2, cols - GREAT_PINE[0].length - 1)), ground + 1, "tree");
 
-  // the dome takes centre stage, with the bell tower beside it when there is room
-  const mid = Math.floor(cols / 2);
-  const domeX = mid - Math.floor(DOME[0].length / 2);
-  stamp(DOME, domeX, ground + 1, "stone");
-  if (cols >= 52) stamp(TOWER, domeX - TOWER[0].length - 1, ground + 1, "stone");
-
-  // arcade to the left, houses and a bridge to the right, as width allows
-  if (cols >= 96) {
-    const units = Math.min(5, Math.floor((domeX - TOWER[0].length - 16) / 7));
-    const ax = domeX - TOWER[0].length - 6 - units * 7;
-    if (units >= 2 && ax > 4) {
-      for (let u = 0; u < units; u++) stamp(ARCADE_UNIT, ax + u * 7, ground + 1, "stone");
-      for (let x = ax - 1; x <= ax + units * 7; x++) put(x, ground - 4, x === ax - 1 ? "." : x === ax + units * 7 ? "." : "=", "stone");
-    }
-  }
-  const right = domeX + DOME[0].length;
-  if (cols >= 72 && free(right + 4, HOUSE[0].length)) stamp(HOUSE, right + 4, ground + 1, "stone");
-  if (cols >= 110) {
-    const bx = right + 22;
-    const span = Math.min(30, cols - bx - 8);
-    if (span >= 18) {
-      for (let i = 0; i < span; i++) {
-        put(bx + i, ground + 1, "=", "stone");
-        put(bx + i, ground + 2, i % 6 === 0 ? "|" : i % 6 === 1 ? "/" : i % 6 === 5 ? "\\" : i % 6 === 3 ? "'" : " ", "stone");
-        if (i % 6 === 0) put(bx + i, ground + 3, "|", "stone");
-      }
-      for (let i = 4; i < span - 4; i += 9) stamp(["  _  ", " /_\\ ", " |_| "], bx + i, ground, "stone");
-      for (let i = bx - 1; i < bx + span + 1; i++) if (i >= 0 && i < cols) taken[i] = 1;
-    }
-  }
-
-  // cypresses wherever a gap is left, taller ones first
-  for (let x = 2; x < cols - 6; x++) {
+  // other trees wherever a gap is left: pines, cypresses, olives, bushes
+  for (let x = 2; x < cols - 9; x++) {
     const n = noise(x, 99);
-    if (n > 0.86 && free(x, 5)) stamp(CYPRESS_TALL, x, ground + 1, "tree");
+    if (n > 0.93 && cols >= 70 && free(x, 9)) stamp(STONE_PINE, x, ground + 1, "tree");
+    else if (n > 0.84 && free(x, 5)) stamp(CYPRESS_TALL, x, ground + 1, "tree");
     else if (n > 0.74 && free(x, 3)) stamp(CYPRESS_SMALL, x, ground + 1, "tree");
+    else if (n > 0.66 && free(x, 7)) stamp(OLIVE, x, ground + 1, "tree");
+    else if (n > 0.6 && free(x, 5)) stamp(BUSH, x, ground + 1, "tree");
   }
 
-  // the nearer slope, drawn last and only in the open ground between buildings and trees
+  // the nearer slope, only in the open ground between trees
   for (let x = 0; x < cols; x++) {
     const n = near(x);
-    if (!taken[x] && cells[n * cols + x].ch === " ") put(x, n, near(x + 1) < n ? "/" : near(x - 1) < n ? "\\" : "-", "hill");
+    if (!taken[x] && at(x, n).ch === " ") put(x, n, near(x + 1) < n ? "/" : near(x - 1) < n ? "\\" : "-", "hill");
   }
 
-  // a few birds over the rooftops
-  for (const [dx, dy] of [[-9, 2], [-5, 1], [11, 3]] as const) {
-    const bx = mid + dx * 2;
-    if (bx > 1 && bx < cols - 2 && cells[dy * cols + bx].ch === " ") put(bx, dy + 1, "v", "sky");
+  // reeds at the water's edge
+  for (let x = 3; x < cols - 4; x++) {
+    if (noise(x, 41) > 0.9 && !taken[x] && !taken[x + 1] && !taken[x + 2]) {
+      stamp(REEDS, x, ground + 2, "tree", false);
+      x += 6;
+    }
+  }
+
+  // a few birds in open sky
+  for (const [dx, dy] of [[-18, 2], [-14, 1], [22, 3], [26, 2]] as const) {
+    const bx = mid + dx;
+    if (bx > 1 && bx < cols - 2 && at(bx, dy).ch === " " && at(bx - 1, dy).ch === " " && at(bx + 1, dy).ch === " ") put(bx, dy, "v", "sky");
   }
 
   return { cols, rows, cells, ground };
 }
 
-/** Plain-text rendering, used in tests and as the canvas fallback text. */
+/** Plain-text rendering, used in tests. */
 export const sceneText = (s: Scene) =>
   Array.from({ length: s.rows }, (_, y) => s.cells.slice(y * s.cols, (y + 1) * s.cols).map((c) => c.ch).join("")).join("\n");
