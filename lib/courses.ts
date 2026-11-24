@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getDb } from "./db";
-import { chatJson, chatStream } from "./llm";
-import { LENGTHS, LengthPreset, WEAK_THRESHOLD, dailyPlan, fitMinutes, progressPercent, toneInstruction } from "./logic";
+import { chatJson, chatStream, chatText } from "./llm";
+import { LENGTHS, LengthPreset, WEAK_THRESHOLD, activityGrid, cleanSvg, dailyPlan, fitMinutes, progressPercent, toneInstruction } from "./logic";
 import { courseStreak, listSessions, touchSession } from "./session";
 import { webSearch } from "./tavily";
 import { traceNote } from "./trace";
@@ -10,7 +10,7 @@ export class NotFound extends Error {}
 
 export type CourseRow = {
   id: number; topic: string; title: string; description: string; goal: string; tone: string;
-  prior_knowledge: string; length_preset: LengthPreset; created_at: string;
+  prior_knowledge: string; length_preset: LengthPreset; created_at: string; image_svg: string | null;
 };
 export type LessonRow = {
   id: number; course_id: number; module_id: number; position: number; title: string; objectives: string;
@@ -183,10 +183,11 @@ function courseStats(courseId: number) {
 
 export function listCourses() {
   const rows = getDb().prepare("SELECT * FROM courses ORDER BY id DESC").all() as CourseRow[];
-  return rows.map((c) => {
+  return rows.map(({ image_svg, ...c }) => {
     const s = courseStats(c.id);
     return {
       ...c,
+      image: image_svg,
       lengthLabel: LENGTHS[c.length_preset].label,
       progress: s.progress,
       lessonsTotal: s.lessons.length,
@@ -221,6 +222,7 @@ export function getCourseDetail(id: number) {
     dueCards: s.dueCards,
     totalCards: s.totalCards,
     streak: courseStreak(id),
+    activity: activityGrid(activityCounts(id)),
     plan: dailyPlan(course.length_preset, course.created_at, s.lessons),
     nextLessonId: lessons.find((l) => !l.completed_at)?.id ?? null,
     modules: modules.map((m) => ({
@@ -230,6 +232,64 @@ export function getCourseDetail(id: number) {
     })),
     sessions: listSessions(id),
   };
+}
+
+/** Things done per day: lessons completed, quizzes taken, and at least 1 for any day with a study session. */
+function activityCounts(courseId: number): Record<string, number> {
+  const db = getDb();
+  const counts: Record<string, number> = {};
+  const add = (rows: unknown[], floor = false) => {
+    for (const r of rows as { d: string; n: number }[]) counts[r.d] = floor ? Math.max(counts[r.d] ?? 0, 1) : (counts[r.d] ?? 0) + r.n;
+  };
+  add(db.prepare("SELECT substr(completed_at, 1, 10) AS d, COUNT(*) AS n FROM lessons WHERE course_id = ? AND completed_at IS NOT NULL GROUP BY d").all(courseId));
+  add(db.prepare("SELECT substr(a.created_at, 1, 10) AS d, COUNT(*) AS n FROM attempts a JOIN quizzes q ON q.id = a.quiz_id WHERE q.course_id = ? GROUP BY d").all(courseId));
+  add(db.prepare("SELECT substr(ended_at, 1, 10) AS d, 1 AS n FROM study_sessions WHERE course_id = ? GROUP BY d").all(courseId), true);
+  return counts;
+}
+
+// ---------- illustration ----------
+
+const drawing = new Map<number, Promise<string | null>>();
+
+/**
+ * Draw the course illustration once and store it. Tries the illustration model first and the
+ * fast model if that fails; returns null when neither produces a usable drawing.
+ */
+export function ensureCourseImage(courseId: number): Promise<string | null> {
+  const course = getCourseRow(courseId);
+  if (course.image_svg) return Promise.resolve(course.image_svg);
+  const running = drawing.get(courseId);
+  if (running) return running;
+  const messages = [
+    {
+      role: "user" as const,
+      content: `Draw a minimalist neon line-art illustration for a course titled "${course.title}" (topic: ${course.topic}).
+Return ONLY an SVG document, no prose, no code fences.
+Rules:
+- <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240"> with no width/height attributes and no background rectangle (it sits on a dark card).
+- One clear, recognisable subject that symbolises the topic, centred, filling about 60% of the canvas, with nothing below y=215. Built from simple geometry: line, polyline, path, circle, ellipse, rect, polygon. 8 to 30 elements.
+- Stroke-only wireframe style: fill="none" on shapes, stroke="#22d3ee" (main lines, stroke-width 3) and stroke="#67e8f9" or "#0e7490" for secondary detail (stroke-width 1.5), stroke-linecap="round" stroke-linejoin="round". A few small solid dots in #a5f3fc are allowed.
+- No text, no <image>, no <script>, no <style>, no <foreignObject>, no <use>, no href, no gradients, no filters, no animation.`,
+    },
+  ];
+  const job = (async () => {
+    for (const model of ["image", "fast"] as const) {
+      try {
+        const svg = cleanSvg(await chatText({ label: `Draw the course illustration (${model === "image" ? "illustration model" : "fast model fallback"})`, model, messages, maxTokens: 16000 }));
+        if (svg) {
+          getDb().prepare("UPDATE courses SET image_svg = ? WHERE id = ?").run(svg, courseId);
+          traceNote("db", "Save course illustration", `${svg.length} characters of SVG`);
+          return svg;
+        }
+        traceNote("db", "Discard course illustration", "the reply was not a plain, static SVG");
+      } catch {
+        // already traced by chatText; try the next model
+      }
+    }
+    return null;
+  })().finally(() => drawing.delete(courseId));
+  drawing.set(courseId, job);
+  return job;
 }
 
 export function deleteCourse(id: number) {

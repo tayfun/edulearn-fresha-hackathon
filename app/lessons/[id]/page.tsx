@@ -68,7 +68,7 @@ function Tutor({ lessonId, initial, ready }: { lessonId: string; initial: Detail
         )}
         {messages.map((m, i) =>
           m.role === "user" ? (
-            <div key={i} className="ml-6 rounded-xl bg-brand px-3 py-2 text-sm text-white">
+            <div key={i} className="ml-6 rounded-xl bg-brand px-3 py-2 text-sm text-on-brand">
               {m.content}
             </div>
           ) : (

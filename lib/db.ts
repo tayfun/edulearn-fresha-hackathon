@@ -138,6 +138,9 @@ export function openDb(file: string): DB {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
+  // Added after the first release: the generated course illustration.
+  const cols = db.prepare("PRAGMA table_info(courses)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "image_svg")) db.exec("ALTER TABLE courses ADD COLUMN image_svg TEXT");
   return db;
 }
 

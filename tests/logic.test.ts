@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { openDb } from "../lib/db";
-import { LENGTHS, dailyPlan, fitMinutes, isWeak, matchConcept, nextMastery, progressPercent, reviewCard, streak, toneInstruction } from "../lib/logic";
+import { LENGTHS, activityGrid, cleanSvg, dailyPlan, fitMinutes, isWeak, matchConcept, nextMastery, progressPercent, reviewCard, streak, toneInstruction } from "../lib/logic";
 import { extractJson } from "../lib/llm";
 
 describe("mastery", () => {
@@ -93,6 +93,33 @@ describe("helpers", () => {
     expect(extractJson('```json\n{"a":1}\n```')).toEqual({ a: 1 });
     expect(extractJson('<think>hmm {x}</think>Sure: {"a":{"b":2}} done')).toEqual({ a: { b: 2 } });
     expect(() => extractJson("no json")).toThrow();
+  });
+});
+
+describe("course illustration", () => {
+  const ok = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240"><circle cx="1" cy="1" r="1"/><path d="M0 0L1 1"/><rect width="2" height="2"/></svg>';
+  it("accepts plain geometry, with or without surrounding chatter", () => {
+    expect(cleanSvg(ok)).toBe(ok);
+    expect(cleanSvg("Here you go:\n```svg\n" + ok + "\n```")).toBe(ok);
+  });
+  it("rejects anything active, external or empty", () => {
+    expect(cleanSvg("no drawing")).toBeNull();
+    expect(cleanSvg(ok.replace("<circle", "<script>alert(1)</script><circle"))).toBeNull();
+    expect(cleanSvg(ok.replace("<circle", '<circle onload="x()"'))).toBeNull();
+    expect(cleanSvg(ok.replace("<circle", '<image href="http://x/y.png"/><circle'))).toBeNull();
+    expect(cleanSvg(ok.replace("<rect", '<rect style="fill:url(http://x)"'))).toBeNull();
+    expect(cleanSvg('<svg viewBox="0 0 1 1"><circle r="1"/></svg>')).toBeNull();
+  });
+});
+
+describe("activity grid", () => {
+  it("lays out Monday-first weeks ending in the current week", () => {
+    // 2026-03-11 is a Wednesday.
+    const grid = activityGrid({ "2026-03-11": 3, "2026-03-09": 1 }, 2, new Date("2026-03-11T15:00:00Z"));
+    expect(grid).toHaveLength(2);
+    expect(grid[0][0].date).toBe("2026-03-02");
+    expect(grid[1].map((d) => d.count)).toEqual([1, 0, 3, 0, 0, 0, 0]);
+    expect(grid[1].map((d) => d.future)).toEqual([false, false, false, true, true, true, true]);
   });
 });
 

@@ -58,9 +58,9 @@ export function useLoad<T>(url: string | null) {
 
 const btnBase = "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed";
 export const btn = {
-  primary: `${btnBase} bg-brand text-white hover:bg-brand-dark`,
+  primary: `${btnBase} bg-brand font-semibold text-on-brand hover:bg-brand-dark`,
   secondary: `${btnBase} border border-line bg-card text-ink hover:border-brand hover:text-brand-dark`,
-  ghost: `${btnBase} text-muted hover:text-ink hover:bg-black/5`,
+  ghost: `${btnBase} text-muted hover:text-ink hover:bg-white/5`,
 };
 
 export function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {

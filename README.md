@@ -31,9 +31,11 @@ persistent disk.
   concept gets a diagnosis, concrete steps, lessons to revisit and web
   resources, plus a practice quiz that targets only weak concepts.
 - **Flashcards** — generated from weak spots, reviewed with Leitner boxes.
-- **Progress** — progress bar weighted by lesson length, daily plan and streak
-  for multi-day courses, and a log of study sessions with the weak spots at
-  the end of each.
+- **Dashboard** — progress ring, 12-week study heatmap and streak, a "Next up"
+  card with an illustration the model draws for the course (SVG line art,
+  generated once in the background and stored), a lesson-by-lesson path, daily
+  plan for multi-day courses, and a log of study sessions with the weak spots
+  at the end of each.
 
 ## Debug mode
 

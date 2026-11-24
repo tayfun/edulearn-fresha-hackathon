@@ -7,7 +7,7 @@ import { Card, ErrorNote, ProgressBar, btn, useLoad } from "@/components/ui";
 
 type CourseSummary = {
   id: number; title: string; topic: string; tone: string; lengthLabel: string; progress: number;
-  lessonsDone: number; lessonsTotal: number; weakCount: number; dueCards: number;
+  lessonsDone: number; lessonsTotal: number; weakCount: number; dueCards: number; image: string | null;
 };
 
 const IDEAS = ["How black holes work", "SQL for data analysis", "Conversational Spanish", "Personal finance basics", "The French Revolution", "Music theory for guitar"];
@@ -64,9 +64,14 @@ export default function Home() {
         <div className="grid gap-4 sm:grid-cols-2">
           {data?.courses.map((c) => (
             <Link key={c.id} href={`/courses/${c.id}`} className="group">
-              <Card className="h-full transition group-hover:border-brand group-hover:shadow-sm">
+              <Card className="lift h-full group-hover:border-brand">
                 <div className="flex items-start justify-between gap-3">
-                  <h3 className="font-display text-lg font-semibold leading-snug">{c.title}</h3>
+                  {c.image && (
+                    // Model-drawn SVG, shown through an <img> so nothing inside it can run.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img alt="" src={`data:image/svg+xml;utf8,${encodeURIComponent(c.image)}`} className="glow-line h-12 w-20 shrink-0 rounded-lg bg-brand-soft/60 object-contain p-1" />
+                  )}
+                  <h3 className="min-w-0 flex-1 font-display text-lg font-semibold leading-snug">{c.title}</h3>
                   <span className="shrink-0 text-sm font-semibold text-brand-dark">{c.progress}%</span>
                 </div>
                 <p className="mt-1 text-sm text-muted">

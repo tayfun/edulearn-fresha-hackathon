@@ -105,6 +105,34 @@ export function dailyPlan(preset: LengthPreset, createdAt: string, lessons: Plan
   };
 }
 
+/**
+ * Accept a model-drawn SVG only if it is plain static geometry. It is shown through an <img>,
+ * which already blocks scripts and external loads; this keeps junk out of the database too.
+ */
+export function cleanSvg(reply: string): string | null {
+  const match = reply.replace(/<think>[\s\S]*?<\/think>/g, "").match(/<svg[\s\S]*<\/svg>/i);
+  if (!match) return null;
+  const svg = match[0].trim();
+  if (svg.length > 20_000 || !/viewBox=/i.test(svg)) return null;
+  if (/<\s*(script|style|foreignObject|image|use|iframe|a|animate|set)\b|\son\w+\s*=|href\s*=|url\s*\(|javascript:|<!|&#/i.test(svg)) return null;
+  const shapes = svg.match(/<(path|line|polyline|polygon|circle|ellipse|rect)\b/gi)?.length ?? 0;
+  return shapes >= 3 ? svg : null;
+}
+
+/** Days with study activity in the last `weeks` weeks, as columns of Monday-first weeks ending this week. */
+export function activityGrid(counts: Record<string, number>, weeks = 12, today = new Date()) {
+  const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  const weekday = (end.getUTCDay() + 6) % 7; // Monday = 0
+  const start = new Date(end.getTime() - (weekday + (weeks - 1) * 7) * 86_400_000);
+  return Array.from({ length: weeks }, (_, w) =>
+    Array.from({ length: 7 }, (_, d) => {
+      const day = new Date(start.getTime() + (w * 7 + d) * 86_400_000);
+      const date = day.toISOString().slice(0, 10);
+      return { date, count: counts[date] ?? 0, future: day > end };
+    }),
+  );
+}
+
 /** Match a model-supplied concept name to one of the known names. */
 export function matchConcept<T extends { name: string }>(name: string | undefined, known: T[]): T | undefined {
   if (known.length === 0) return undefined;
