@@ -6,7 +6,18 @@
 
 export type Tone = "sky" | "glow" | "sun" | "far" | "mid" | "land" | "tree" | "water" | "shine";
 export type Cell = { ch: string; tone: Tone; ink: number };
-export type Scene = { cols: number; rows: number; cells: Cell[]; /** Where the sun sits, 0..1 across. */ sunU: number };
+export type Scene = {
+  cols: number;
+  rows: number;
+  cells: Cell[];
+  /** Where the sun sits: 0..1 across, and 0..1 down the picture. */
+  sunU: number;
+  sunV: number;
+  /** True when the sun is on the horizon; false for a daytime sky with the sun up. */
+  sunset: boolean;
+  /** How many trees stand at the left and right edges. */
+  trees: [left: number, right: number];
+};
 
 export const SCENE_ROWS = 64;
 /** Characters from least to most ink. */
@@ -16,7 +27,7 @@ const HORIZON = 0.58;
 
 type Peak = [centre: number, width: number, height: number];
 /** Everything about one particular landscape that a seed decides. */
-type Look = { shift: number; sunU: number; far: Peak[]; mid: Peak[]; bend: number; phase: number; flip: boolean };
+type Look = { shift: number; sunU: number; sunV: number; sunset: boolean; far: Peak[]; mid: Peak[]; bend: number; phase: number; left: Tree; right: Tree };
 
 /** Seed 0 is the reference composition; any other seed rearranges it. */
 function lookFor(seed: number): Look {
@@ -28,7 +39,10 @@ function lookFor(seed: number): Look {
       mid: [[0.07, 0.17, 0.09], [0.93, 0.15, 0.08], [0.7, 0.08, 0.045], [0.28, 0.07, 0.04]],
       bend: 0.045,
       phase: 0.4,
-      flip: false,
+      left: LEFT,
+      right: RIGHT,
+      sunV: HORIZON,
+      sunset: true,
     };
   }
   let state = Math.floor(seed) >>> 0 || 1;
@@ -43,18 +57,44 @@ function lookFor(seed: number): Look {
   const between = (a: number, b: number) => a + (b - a) * rnd();
   const range = (count: number, minH: number, maxH: number, minW: number, maxW: number): Peak[] =>
     Array.from({ length: count }, (_, i) => [between(i / count, (i + 1) / count), between(minW, maxW), between(minH, maxH)]);
+  /** A stand of `count` trees: the one nearest the edge is tallest, each with its own cluster of crowns. */
+  const stand = (count: number): Tree => {
+    const tree: Tree = { trunks: [], crowns: [] };
+    for (let i = 0; i < count; i++) {
+      const baseX = 0.05 + i * between(0.075, 0.105);
+      const topX = baseX + between(-0.03, 0.06);
+      const topY = Math.min(0.62, between(0.16, 0.3) + i * between(0.05, 0.1));
+      const size = between(0.085, 0.13) * (1 - i * 0.1);
+      tree.trunks.push([baseX, topX, topY]);
+      tree.crowns.push([topX, topY - size * 0.45, size]);
+      const extra = 2 + Math.floor(rnd() * 3);
+      for (let k = 0; k < extra; k++) tree.crowns.push([topX + between(-1.25, 1.25) * size, topY + between(-0.75, 0.9) * size, size * between(0.5, 0.85)]);
+    }
+    return tree;
+  };
+  const sunset = rnd() < 0.5;
+  // one to four trees a side, and now and then one side left open
+  let leftCount = 1 + Math.floor(rnd() * 4);
+  let rightCount = 1 + Math.floor(rnd() * 4);
+  const open = rnd();
+  if (open < 0.12) leftCount = 0;
+  else if (open < 0.24) rightCount = 0;
   return {
     shift: between(10, 5000),
     sunU: between(0.36, 0.64),
+    sunV: sunset ? HORIZON : between(0.14, 0.3),
+    sunset,
+    left: stand(leftCount),
+    right: stand(rightCount),
     far: range(5, 0.05, 0.22, 0.05, 0.15),
     mid: range(5, 0.03, 0.1, 0.06, 0.17),
     bend: between(0.02, 0.07) * (rnd() < 0.5 ? -1 : 1),
     phase: between(0, 6.28),
-    flip: rnd() < 0.5,
   };
 }
 
-let look = lookFor(0);
+// Set once the tree shapes below exist, and again by every buildScene call.
+let look: Look;
 
 function hash(x: number, y: number) {
   const n = Math.sin((x + look.shift) * 127.1 + (y + look.shift * 0.37) * 311.7) * 43758.5453;
@@ -81,6 +121,8 @@ const RIGHT: Tree = {
   trunks: [[0.09, 0.13, 0.26], [0.17, 0.16, 0.36]],
   crowns: [[0.1, 0.2, 0.13], [0.23, 0.27, 0.11], [0.05, 0.37, 0.09], [0.2, 0.13, 0.09], [0.31, 0.41, 0.07], [0.14, 0.5, 0.06]],
 };
+
+look = lookFor(0);
 
 function inTree(tree: Tree, x: number, y: number, scale: number): number {
   const px = x / scale;
@@ -109,27 +151,35 @@ export function shade(u: number, v: number, aspect: number): { ink: number; tone
   const scale = Math.max(0.72, Math.min(1, aspect / 2.6));
 
   // framing trees and the undergrowth at their feet come first: they stand in front of everything
-  const tree = Math.max(inTree(look.flip ? RIGHT : LEFT, x, v, scale), inTree(look.flip ? LEFT : RIGHT, aspect - x, v, scale));
+  const tree = Math.max(inTree(look.left, x, v, scale), inTree(look.right, aspect - x, v, scale));
   if (tree) return { ink: tree, tone: "tree" };
   const brush = 0.93 - 0.17 * bump(u, 0, 0.22) - 0.17 * bump(u, 1, 0.2) + 0.035 * fbm(u * 14 * aspect, 3);
   if (v > brush) return { ink: Math.min(1, 0.45 + (v - brush) * 4 + 0.45 * fbm(x * 30, v * 30) + (v > 0.965 ? 0.4 : 0)), tone: "tree" };
 
-  const { sunU } = look;
+  const { sunU, sunV, sunset } = look;
+  const gap = sunset ? 1 : 0.25; // the ranges only open up for a setting sun
   const peaks = (list: Peak[]) => list.reduce((sum, [c, w, h]) => sum + h * bump(u, c, w), 0);
   // both ranges part where the sun sets
-  const far = HORIZON - (0.035 + peaks(look.far) + 0.05 * fbm(u * 9, 1)) * (1 - 0.7 * bump(u, sunU, 0.1));
-  const mid = HORIZON - (0.014 + peaks(look.mid) + 0.035 * fbm(u * 14, 5)) * (1 - 0.95 * bump(u, sunU, 0.1));
+  const far = HORIZON - (0.035 + peaks(look.far) + 0.05 * fbm(u * 9, 1)) * (1 - 0.7 * gap * bump(u, sunU, 0.1));
+  const mid = HORIZON - (0.014 + peaks(look.mid) + 0.035 * fbm(u * 14, 5)) * (1 - 0.95 * gap * bump(u, sunU, 0.1));
 
   if (v < HORIZON) {
     const sx = sunU * aspect;
-    const sunDist = Math.hypot(x - sx, v - HORIZON);
+    const sunDist = Math.hypot(x - sx, v - sunV);
     // each range is hatched lightly, darker along its crest and its shaded folds
     if (v > mid) return { ink: Math.min(0.9, 0.34 + (v - mid < 0.02 ? 0.3 : 0) + 0.4 * fbm(x * 14, v * 14)), tone: "mid" };
-    if (sunDist < 0.075) return { ink: 1, tone: "sun" };
+    if (sunDist < (sunset ? 0.075 : 0.055)) return { ink: 1, tone: "sun" };
     if (v > far) return { ink: Math.min(0.75, 0.3 + (v - far < 0.02 ? 0.3 : 0) + 0.22 * fbm(x * 10 + v * 24, v * 18)), tone: "far" };
-    // sky: clear above, with thin streaks of sunset cloud low over the horizon
-    const streak = fbm(x * 4, v * 60) * Math.exp(-(((x - sx) / 1.1) ** 2)) * Math.exp(-((HORIZON - v) / 0.2));
-    if (streak > 0.24) return { ink: Math.min(0.8, (streak - 0.24) * 3 + 0.12), tone: "glow" };
+    if (sunset) {
+      // clear above, with thin streaks of sunset cloud low over the horizon
+      const streak = fbm(x * 4, v * 60) * Math.exp(-(((x - sx) / 1.1) ** 2)) * Math.exp(-((HORIZON - v) / 0.2));
+      if (streak > 0.24) return { ink: Math.min(0.8, (streak - 0.24) * 3 + 0.12), tone: "glow" };
+    } else {
+      // daytime: a halo round the high sun and a few flat-bottomed clouds drifting across
+      if (sunDist < 0.11 && fbm(x * 60, v * 60) > 0.5) return { ink: 0.3 * (1 - sunDist / 0.11) + 0.08, tone: "glow" };
+      const cloud = fbm(x * 2.4 + 7, v * 11) - 0.1 * Math.abs(v - 0.22) * 8;
+      if (cloud > 0.53 && v < 0.46) return { ink: Math.min(0.55, (cloud - 0.53) * 3.5 + 0.08), tone: "sky" };
+    }
     return { ink: hash(Math.floor(x * 300), Math.floor(v * 300)) > 0.988 ? 0.1 : 0, tone: "sky" };
   }
 
@@ -140,7 +190,7 @@ export function shade(u: number, v: number, aspect: number): { ink: number; tone
   const off = Math.abs(u - centre);
   if (off < half) {
     const ripple = noise(x * 26, v * 190);
-    if (Math.abs(u - sunU) < (0.014 + 0.035 * t) / Math.max(1, aspect / 2.6) + 0.004 && ripple > 0.4) return { ink: 0.55 + 0.4 * ripple, tone: "shine" };
+    if (Math.abs(u - sunU) < ((sunset ? 0.014 : 0.008) + 0.035 * t) / Math.max(1, aspect / 2.6) + 0.004 && ripple > (sunset ? 0.4 : 0.55)) return { ink: 0.55 + 0.4 * ripple, tone: "shine" };
     return { ink: 0.12 + (ripple > 0.6 ? 0.3 : 0) + 0.12 * t, tone: "water" };
   }
   // banks: clumps of trees and scrub that grow larger towards the viewer, darkest at the waterline
@@ -165,7 +215,7 @@ export function buildScene(cols: number, rows = SCENE_ROWS, cellAspect = 0.55, s
       cells.push({ ch: RAMP[Math.round(grained * (RAMP.length - 1))], tone, ink: grained });
     }
   }
-  return { cols, rows, cells, sunU: look.sunU };
+  return { cols, rows, cells, sunU: look.sunU, sunV: look.sunV, sunset: look.sunset, trees: [look.left.trunks.length, look.right.trunks.length] };
 }
 
 /** Plain-text rendering, used in tests. */

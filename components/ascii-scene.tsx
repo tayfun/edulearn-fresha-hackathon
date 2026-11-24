@@ -15,6 +15,8 @@ const COLOR: Record<Tone, [string, number]> = {
   water: ["#6f89ee", 0.6],
   shine: ["#ff8f70", 0.95],
 };
+// By day the sun and its light on the water are pale gold rather than coral.
+const DAY: Partial<Record<Tone, [string, number]>> = { sun: ["#ffe08a", 1], glow: ["#ffe9a8", 0.7], shine: ["#fff0c4", 0.85] };
 const SPARK = "@#%&$*+=<>/\\|";
 const CELL_W = 4.2;
 const CELL_H = 7;
@@ -51,6 +53,7 @@ export function AsciiScene() {
     let last = 0;
     let dpr = 1;
 
+    const ink = (tone: Tone) => (!scene.sunset && DAY[tone]) || COLOR[tone];
     const paint = (c: CanvasRenderingContext2D, i: number, ch: string, color: string, alpha: number) => {
       c.globalAlpha = alpha;
       c.fillStyle = color;
@@ -79,7 +82,7 @@ export function AsciiScene() {
       }
       scene.cells.forEach((cell, i) => {
         if (cell.ch === " ") return;
-        const [color, alpha] = COLOR[cell.tone];
+        const [color, alpha] = ink(cell.tone);
         paint(pc, i, cell.ch, color, alpha * (0.5 + 0.5 * cell.ink));
       });
       draw(0);
@@ -109,7 +112,7 @@ export function AsciiScene() {
       if (!still) {
         for (const i of shimmer) {
           if (i >= shown || hash3(i, frame >> 2) > 0.3) continue;
-          redraw(i, "~=-*"[(hash3(i, frame) * 4) | 0], COLOR.shine[0], 0.55 + 0.45 * hash3(frame, i));
+          redraw(i, "~=-*"[(hash3(i, frame) * 4) | 0], ink("shine")[0], 0.55 + 0.45 * hash3(frame, i));
         }
       }
       // characters the pointer has stirred up
@@ -120,7 +123,7 @@ export function AsciiScene() {
         const stirred = Math.random() < h;
         const ch = stirred ? SPARK[(Math.random() * SPARK.length) | 0] : cell.ch === " " ? RAMP[1 + ((h * 4) | 0)] : cell.ch;
         const warm = cell.tone === "sun" || cell.tone === "shine" || cell.tone === "glow";
-        redraw(i, ch, h > 0.5 ? "#ffffff" : warm ? "#ffc2ad" : "#cdd8ff", Math.min(1, 0.35 + h));
+        redraw(i, ch, h > 0.5 ? "#ffffff" : warm ? (scene.sunset ? "#ffc2ad" : "#fff3cf") : "#cdd8ff", Math.min(1, 0.35 + h));
       }
       ctx.globalAlpha = 1;
     };

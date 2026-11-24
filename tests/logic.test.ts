@@ -198,18 +198,39 @@ describe("ascii scene", () => {
     expect(text(7)).not.toBe(text(8));
     expect(text(0)).toBe(sceneText(buildScene(183, SCENE_ROWS, 0.6)));
   });
-  it("keeps the composition whatever the seed: sun on the horizon over the river, trees at both edges", () => {
+  it("keeps the composition whatever the seed: a sun over the river, dense ground, every layer present", () => {
     for (const seed of [1, 2, 3, 99, 12345, 2 ** 31 - 1]) {
       const scene = buildScene(343, SCENE_ROWS, 0.6, seed);
       const at = (u: number, v: number) => scene.cells[Math.floor(v * scene.rows) * scene.cols + Math.floor(u * scene.cols)].tone;
       expect(scene.sunU).toBeGreaterThan(0.3);
       expect(scene.sunU).toBeLessThan(0.7);
-      expect(at(scene.sunU, 0.555)).toBe("sun");
+      expect(at(scene.sunU, scene.sunset ? 0.555 : scene.sunV)).toBe("sun");
       expect(["water", "shine"]).toContain(at(scene.sunU, 0.62));
-      expect(at(0.01, 0.97)).toBe("tree");
-      expect(at(0.99, 0.97)).toBe("tree");
+      expect(at(0.5, 0.99)).toBe("tree"); // undergrowth along the bottom
       expect(new Set(scene.cells.map((c) => c.tone)).size).toBeGreaterThanOrEqual(8);
     }
+  });
+  it("varies the time of day and the number of trees with the seed", () => {
+    const scenes = Array.from({ length: 60 }, (_, i) => buildScene(120, SCENE_ROWS, 0.6, i + 1));
+    expect(scenes.some((s) => s.sunset)).toBe(true);
+    expect(scenes.some((s) => !s.sunset)).toBe(true);
+    for (const s of scenes) {
+      // a setting sun sits on the horizon, a daytime sun well above it
+      if (s.sunset) expect(s.sunV).toBeCloseTo(0.58, 5);
+      else expect(s.sunV).toBeLessThan(0.35);
+      expect(s.trees[0] + s.trees[1]).toBeGreaterThan(0);
+      for (const n of s.trees) {
+        expect(n).toBeGreaterThanOrEqual(0);
+        expect(n).toBeLessThanOrEqual(4);
+      }
+    }
+    expect(new Set(scenes.map((s) => s.trees.join("+"))).size).toBeGreaterThan(8);
+    // more trees means more of the picture is tree
+    const treeCells = (scene: (typeof scenes)[number]) => scene.cells.filter((c) => c.tone === "tree").length;
+    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+    const few = scenes.filter((s) => s.trees[0] + s.trees[1] <= 2).map(treeCells);
+    const many = scenes.filter((s) => s.trees[0] + s.trees[1] >= 6).map(treeCells);
+    expect(mean(many)).toBeGreaterThan(mean(few));
   });
 });
 
