@@ -1,102 +1,65 @@
 // Decorative SVG artwork. Everything here is aria-hidden: it carries no information.
 
-// Stars stay in the right-hand sky, clear of the title and description.
+export const PINE = "M0 -46 C3 -38 8 -32 12 -27 H7 C10 -20 15 -14 19 -9 H11 C14 -3 19 2 23 6 H3 V15 H-3 V6 H-23 C-19 2 -14 -3 -11 -9 H-19 C-15 -14 -10 -20 -7 -27 H-12 C-8 -32 -3 -38 0 -46 Z";
+
+// Positions are percentages of the star field, which only covers the sky to the right of the text.
 const STARS = [
-  [700, 50, 1.8],
-  [760, 130, 1.2],
-  [830, 70, 2.2],
-  [905, 36, 1.3],
-  [960, 120, 1.6],
-  [1010, 60, 1.2],
-  [1080, 30, 2],
-  [1150, 96, 1.4],
-  [1180, 190, 1.2],
-  [860, 190, 1.1],
-  [740, 220, 1.5],
-  [1120, 150, 1],
-  [650, 110, 1.2],
-  [1035, 14, 1.1],
+  [8, 10, 1.6],
+  [22, 30, 1.1],
+  [34, 8, 2],
+  [47, 22, 1.2],
+  [60, 6, 1.5],
+  [72, 16, 1.1],
+  [86, 9, 1.9],
+  [95, 28, 1.3],
+  [15, 52, 1.2],
+  [90, 55, 1.1],
+  [5, 78, 1.4],
+  [97, 80, 1.2],
+  [40, 40, 0.9],
 ];
 
-const PINE = "M0 -46 C3 -38 8 -32 12 -27 H7 C10 -20 15 -14 19 -9 H11 C14 -3 19 2 23 6 H3 V15 H-3 V6 H-23 C-19 2 -14 -3 -11 -9 H-19 C-15 -14 -10 -20 -7 -27 H-12 C-8 -32 -3 -38 0 -46 Z";
-
-/** Dusk landscape behind the course header. The progress ring sits where the low sun would be, above the ridges. */
+/**
+ * Dusk sky and distant ridges behind the course header. The foreground hill is drawn by the
+ * lesson trail itself, so this layer only needs to stay clear of the text.
+ */
 export function HeroArt() {
   return (
-    <svg aria-hidden viewBox="0 0 1200 600" preserveAspectRatio="xMaxYMax slice" className="absolute inset-0 h-full w-full">
-      <defs>
-        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#04241f" />
-          <stop offset="0.45" stopColor="#0a4f44" />
-          <stop offset="0.72" stopColor="#1a7a6b" />
-          <stop offset="0.8" stopColor="#e9a94a" stopOpacity="0.55" />
-        </linearGradient>
-        <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0" stopColor="#d9fff3" stopOpacity="0.5" />
-          <stop offset="0.4" stopColor="#8fe3cd" stopOpacity="0.18" />
-          <stop offset="1" stopColor="#8fe3cd" stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id="ridge1" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#2c8f7d" />
-          <stop offset="1" stopColor="#136253" />
-        </linearGradient>
-        <linearGradient id="ridge2" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#15695a" />
-          <stop offset="1" stopColor="#0a473d" />
-        </linearGradient>
-        <linearGradient id="ridge3" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#0b4a40" />
-          <stop offset="1" stopColor="#06342d" />
-        </linearGradient>
-        <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#04241f" stopOpacity="0.88" />
-          <stop offset="0.5" stopColor="#04241f" stopOpacity="0.45" />
-          <stop offset="0.8" stopColor="#04241f" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <rect width="1200" height="600" fill="url(#sky)" />
-
-      <g className="hidden sm:block">
+    <div aria-hidden className="absolute inset-0 overflow-hidden bg-[linear-gradient(180deg,#04241f_0%,#0a4f44_52%,#1a7a6b_100%)]">
+      {/* stars and one cloud, right of the text column and only where there is room */}
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute right-0 top-0 hidden h-[58%] w-[36%] overflow-visible sm:block">
         {STARS.map(([x, y, r], i) => (
-          <circle key={i} cx={x} cy={y} r={r} fill="#fff3cf" className="twinkle" style={{ "--i": i } as React.CSSProperties} />
+          <circle key={i} cx={x} cy={y} r={r * 0.5} fill="#fff3cf" className="twinkle" style={{ "--i": i } as React.CSSProperties} vectorEffect="non-scaling-stroke" />
         ))}
-        {/* a soft cloud bank, right of the text */}
-        <g className="sway" fill="#ffffff" opacity="0.1">
-          <path d="M700 300 C700 288 716 282 728 286 C734 270 762 266 774 280 C786 268 814 272 818 288 C834 286 846 294 844 304 C844 310 838 312 832 312 H712 C704 312 700 308 700 300 Z" />
-          <path d="M1090 214 C1090 205 1102 200 1111 203 C1116 191 1137 189 1146 199 C1156 191 1176 195 1178 207 C1190 206 1198 212 1196 219 C1196 223 1192 225 1188 225 H1099 C1093 225 1090 221 1090 214 Z" />
-        </g>
-      </g>
+      </svg>
+      <svg viewBox="0 0 160 40" className="sway absolute right-[27%] top-[9%] hidden w-28 opacity-[0.13] lg:block" fill="#fff">
+        <path d="M4 30 C4 20 16 15 26 18 C31 5 54 2 64 13 C74 3 97 6 100 19 C113 17 123 24 121 32 C121 37 116 39 111 39 H14 C7 39 4 36 4 30 Z" />
+      </svg>
 
-      <circle cx="1040" cy="282" r="170" fill="url(#sun)" className="sun-glow" />
-
-      {/* three ridges, lighter and hazier with distance */}
-      <path
-        d="M0 438 C90 410 150 382 230 392 C310 402 350 352 440 362 C530 372 580 418 670 404 C760 390 800 346 880 356 C960 366 1010 410 1090 396 C1140 388 1170 372 1200 366 V600 H0 Z"
-        fill="url(#ridge1)"
-      />
-      <path d="M0 470 C120 430 220 444 330 458 C450 474 540 420 660 436 C780 452 860 468 960 446 C1050 426 1130 440 1200 430 V600 H0 Z" fill="url(#ridge2)" />
-      <g fill="#063730">
-        {[
-          [905, 468, 1],
-          [943, 474, 0.72],
-          [987, 466, 1.2],
-          [1029, 476, 0.85],
-          [640, 472, 0.7],
-          [672, 476, 0.55],
-        ].map(([x, y, s], i) => (
-          <path key={i} transform={`translate(${x} ${y}) scale(${s})`} d={PINE} />
-        ))}
-      </g>
-      {/* dark foreground: the lesson trail is drawn on top of this */}
-      <path d="M0 496 C220 474 440 490 640 482 C860 474 1020 492 1200 478 V600 H0 Z" fill="url(#ridge3)" />
-      <rect width="1200" height="600" fill="url(#fade)" />
-    </svg>
+      {/* far ridges pinned to the bottom, hazier with distance */}
+      <svg viewBox="0 0 1200 240" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-56 w-full sm:h-64">
+        <defs>
+          <linearGradient id="ridge1" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#2a8c7a" />
+            <stop offset="1" stopColor="#15695a" />
+          </linearGradient>
+          <linearGradient id="ridge2" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#176f5f" />
+            <stop offset="1" stopColor="#0b4a40" />
+          </linearGradient>
+        </defs>
+        <path d="M0 78 C90 50 150 22 230 32 C310 42 350 0 440 8 C530 16 580 58 670 44 C760 30 800 4 880 12 C960 20 1010 50 1090 36 C1140 28 1170 12 1200 6 V240 H0 Z" fill="url(#ridge1)" />
+        <path d="M0 110 C120 70 220 84 330 98 C450 114 540 60 660 76 C780 92 860 108 960 86 C1050 66 1130 80 1200 70 V240 H0 Z" fill="url(#ridge2)" />
+      </svg>
+      {/* keeps the text side legible on wide screens */}
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgb(4_36_31/0.75)_0%,rgb(4_36_31/0.3)_55%,transparent_85%)]" />
+    </div>
   );
 }
 
 /** The same ridges and pines as the header, in daylight, with books and a paper plane. */
 export function FooterArt() {
-  const flight = "M-40 92 C140 30 300 110 480 62 C660 14 860 96 1240 34";
+  const flight = "M-40 80 C140 24 300 92 480 50 C660 8 900 60 1240 20";
   return (
     <svg aria-hidden viewBox="0 0 1200 200" preserveAspectRatio="xMidYMax slice" className="block h-40 w-full sm:h-52">
       <defs>
@@ -109,8 +72,9 @@ export function FooterArt() {
           <stop offset="1" stopColor="#5fa897" />
         </linearGradient>
       </defs>
-      <circle cx="930" cy="70" r="26" fill="#f6b84a" opacity="0.9" />
-      <circle cx="930" cy="70" r="44" fill="#f6b84a" opacity="0.18" className="sun-glow" />
+      {/* low sun, half behind the far ridge */}
+      <circle cx="790" cy="84" r="50" fill="#f6b84a" opacity="0.18" className="sun-glow" />
+      <circle cx="790" cy="84" r="28" fill="#f6b84a" />
 
       <path d="M0 128 C90 100 150 78 230 88 C310 98 350 60 440 70 C530 80 580 118 670 106 C760 94 800 58 880 68 C960 78 1010 114 1090 102 C1140 94 1170 82 1200 78 V200 H0 Z" fill="url(#f1)" />
 
@@ -127,19 +91,21 @@ export function FooterArt() {
           [140, 156, 0.72],
           [186, 150, 1.25],
           [236, 160, 0.8],
+          [430, 152, 0.9],
+          [468, 158, 0.65],
+          [722, 150, 0.95],
+          [760, 158, 0.7],
           [1010, 138, 1.15],
           [1056, 146, 0.8],
           [1102, 138, 1.3],
           [1150, 148, 0.9],
-          [404, 152, 0.7],
-          [820, 152, 0.75],
         ].map(([x, y, s], i) => (
           <path key={i} transform={`translate(${x} ${y}) scale(${s})`} d={PINE} />
         ))}
       </g>
 
       {/* stack of books with a sprout, centre stage */}
-      <g transform="translate(600 122) scale(1.5)">
+      <g transform="translate(600 132) scale(1.3)">
         <g className="bob">
           <rect x="-36" y="18" width="72" height="14" rx="3" fill="#0a4f44" />
           <rect x="-29" y="21" width="42" height="2" rx="1" fill="#e3f1ed" opacity="0.7" />
@@ -154,7 +120,8 @@ export function FooterArt() {
         </g>
       </g>
 
-      <path d="M0 186 C240 164 420 192 640 180 C860 168 1020 190 1200 172 V200 H0 Z" fill="#0f6b5c" />
+      <path d="M0 186 C240 164 420 192 640 180 C860 168 1020 190 1200 172 V200 H0 Z" fill="#157a69" />
+      <rect y="197" width="1200" height="3" fill="#0f6b5c" />
     </svg>
   );
 }

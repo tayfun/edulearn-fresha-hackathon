@@ -56,60 +56,101 @@ function useCountUp(target: number, ms = 1200) {
   return value;
 }
 
-function ProgressRing({ value, small = false }: { value: number; small?: boolean }) {
+function ProgressRing({ value }: { value: number }) {
   const shown = useCountUp(value);
   const r = 52;
   const full = 2 * Math.PI * r;
   return (
-    <div className={`relative shrink-0 ${small ? "h-[4.5rem] w-[4.5rem]" : "h-40 w-40"}`} role="img" aria-label={`Course progress ${value}%`}>
-      <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90">
-        <circle cx="64" cy="64" r={r} fill="rgb(4 36 31 / 0.6)" stroke="rgb(255 255 255 / 0.2)" strokeWidth="10" />
-        <circle
-          cx="64"
-          cy="64"
-          r={r}
-          fill="none"
-          stroke="#f6b84a"
-          strokeWidth="10"
-          strokeLinecap="round"
-          strokeDasharray={full}
-          strokeDashoffset={full * (1 - shown / 100)}
-        />
+    <div className="relative h-28 w-28 shrink-0 sm:h-40 sm:w-40" role="img" aria-label={`Course progress ${value}%`}>
+      {/* moonlight behind the ring, wherever the ring ends up */}
+      <span aria-hidden className="sun-glow absolute -inset-10 rounded-full bg-[radial-gradient(closest-side,rgb(217_255_243/0.4),rgb(143_227_205/0.12)_55%,transparent)] sm:-inset-16" />
+      <svg viewBox="0 0 128 128" className="relative h-full w-full -rotate-90">
+        <circle cx="64" cy="64" r={r} fill="rgb(4 36 31 / 0.72)" stroke="rgb(255 255 255 / 0.22)" strokeWidth="10" />
+        <circle cx="64" cy="64" r={r} fill="none" stroke="#f6b84a" strokeWidth="10" strokeLinecap="round" strokeDasharray={full} strokeDashoffset={full * (1 - shown / 100)} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-        <span className={`font-display font-semibold leading-none tabular-nums ${small ? "text-lg" : "text-4xl"}`}>{shown}%</span>
-        {!small && <span className="mt-1 text-[11px] uppercase tracking-wider text-white/75">complete</span>}
+        <span className="font-display text-2xl font-semibold leading-none tabular-nums sm:text-4xl">{shown}%</span>
+        <span className="mt-1 text-[9px] uppercase tracking-wider text-white/80 sm:text-[11px]">complete</span>
       </div>
     </div>
   );
 }
 
-/** One dot per lesson along a line: done, next (pulsing) or still ahead. */
-function Trail({ lessons, nextId }: { lessons: Lesson[]; nextId: number | null }) {
+// The trail is one cubic curve climbing the foreground hill, in fractions of the trail box.
+type Pt = [number, number];
+const CURVE: [Pt, Pt, Pt, Pt] = [
+  [0.04, 0.5],
+  [0.32, 0.64],
+  [0.6, 0.26],
+  [0.9, 0.2],
+];
+const lerp = (a: Pt, b: Pt, t: number): Pt => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+/** De Casteljau: the point at t and the control points of the curve from 0 to t. */
+function splitCurve(t: number) {
+  const [p0, p1, p2, p3] = CURVE;
+  const a = lerp(p0, p1, t),
+    b = lerp(p1, p2, t),
+    c = lerp(p2, p3, t);
+  const d = lerp(a, b, t),
+    e = lerp(b, c, t);
+  return { point: lerp(d, e, t), head: [p0, a, d, lerp(d, e, t)] as Pt[] };
+}
+const W = 1000;
+const H = 200;
+const svgPath = (pts: Pt[]) =>
+  `M${pts[0][0] * W} ${pts[0][1] * H} C${pts
+    .slice(1)
+    .map((p) => `${p[0] * W} ${p[1] * H}`)
+    .join(" ")}`;
+
+/** The foreground hill. Lessons are waypoints along its crest, climbing from Start to a flag at the summit. */
+function Trail({ lessons, nextId, children }: { lessons: Lesson[]; nextId: number | null; children: React.ReactNode }) {
+  const n = lessons.length;
+  const tOf = (i: number) => (i + 0.5) / n;
+  const nextIndex = lessons.findIndex((l) => l.id === nextId);
+  const reached = nextIndex === -1 ? 1 : tOf(nextIndex);
+  const crest = svgPath(CURVE);
+  const [p0, , , p3] = CURVE;
+  const hill = `M0 ${p0[1] * H - 6} L${p0[0] * W} ${p0[1] * H} ${crest.slice(crest.indexOf("C"))} L${W} ${p3[1] * H + 4} V${H} H0 Z`;
+  const pct = (p: Pt) => ({ left: `${p[0] * 100}%`, top: `${p[1] * 100}%` });
+  const dense = n > 16;
   return (
-    <div className="relative mt-6">
-      <div className="mb-2 flex justify-between text-[11px] uppercase tracking-wider text-white/70">
-        <span>Start</span>
-        <span className="flex items-center gap-1 text-[#f6b84a]">
-          Summit <Icon name="flag" className="flag-wave h-3.5 w-3.5" />
-        </span>
-      </div>
-      <ol className="relative flex items-center justify-between">
-        <span aria-hidden className="absolute inset-x-1 top-1/2 h-0.5 -translate-y-1/2 bg-white/25" />
+    <div className="relative h-52">
+      <svg aria-hidden viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+        <defs>
+          <linearGradient id="hill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#0a443a" />
+            <stop offset="0.6" stopColor="#052a25" />
+          </linearGradient>
+        </defs>
+        <path d={hill} fill="url(#hill)" />
+        <path d={crest} fill="none" stroke="rgb(255 255 255 / 0.4)" strokeWidth="2" strokeDasharray="2 7" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        <path d={svgPath(splitCurve(reached).head)} fill="none" stroke="#f6b84a" strokeWidth="3" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      </svg>
+
+      <span className="absolute -translate-x-2 text-[11px] font-medium uppercase tracking-wider text-white/85" style={{ left: `${p0[0] * 100}%`, top: `calc(${p0[1] * 100}% - 30px)` }}>
+        Start
+      </span>
+
+      <ol>
         {lessons.map((l, i) => {
           const isNext = l.id === nextId;
           return (
-            <li key={l.id} className="relative">
+            <li key={l.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={pct(splitCurve(tOf(i)).point)}>
               <Link
                 href={`/lessons/${l.id}`}
                 title={`${i + 1}. ${l.title}${l.completed_at ? " (done)" : isNext ? " (up next)" : ""}`}
                 aria-label={`Lesson ${i + 1}: ${l.title}${l.completed_at ? ", done" : isNext ? ", up next" : ""}`}
-                className="relative flex h-6 w-3 items-center justify-center sm:w-4"
+                className={`group relative flex items-center justify-center ${dense ? "h-5 w-2" : "h-7 w-5"}`}
               >
-                {isNext && <span aria-hidden className="ping-soft absolute h-3 w-3 rounded-full bg-[#f6b84a]" />}
+                {isNext && <span aria-hidden className="ping-soft absolute h-4 w-4 rounded-full bg-[#f6b84a]" />}
                 <span
-                  className={`relative block rounded-full transition-transform hover:scale-150 ${
-                    l.completed_at ? "h-2.5 w-2.5 bg-[#f6b84a]" : isNext ? "h-3.5 w-3.5 border-2 border-[#f6b84a] bg-[#062f29]" : "h-2 w-2 bg-white/45"
+                  className={`relative block rounded-full transition-transform group-hover:scale-150 ${
+                    l.completed_at
+                      ? `bg-[#f6b84a] ring-2 ring-[#052a25] ${dense ? "h-2 w-2" : "h-3 w-3"}`
+                      : isNext
+                        ? `border-[3px] border-[#f6b84a] bg-[#052a25] ${dense ? "h-3 w-3" : "h-4 w-4"}`
+                        : `bg-white/70 ring-2 ring-[#0a443a] ${dense ? "h-1.5 w-1.5" : "h-2.5 w-2.5"}`
                   }`}
                 />
               </Link>
@@ -117,6 +158,17 @@ function Trail({ lessons, nextId }: { lessons: Lesson[]; nextId: number | null }
           );
         })}
       </ol>
+
+      {/* summit flag at the top of the climb */}
+      <div aria-hidden className="absolute" style={pct(p3)}>
+        <svg viewBox="0 0 40 56" className="absolute -left-[3px] bottom-0 h-12 w-9 sm:h-14 sm:w-10">
+          <line x1="3" y1="56" x2="3" y2="4" stroke="#fff7df" strokeWidth="3" strokeLinecap="round" />
+          <path d="M5 5 C14 0 22 10 36 5 V25 C22 30 14 20 5 25 Z" fill="#f6b84a" className="flag-wave" />
+        </svg>
+        <span className="absolute right-2 top-2.5 whitespace-nowrap text-[11px] font-medium uppercase tracking-wider text-[#f6b84a]">Summit</span>
+      </div>
+
+      <div className="absolute inset-x-6 bottom-5 sm:inset-x-9 sm:bottom-6">{children}</div>
     </div>
   );
 }
@@ -124,7 +176,7 @@ function Trail({ lessons, nextId }: { lessons: Lesson[]; nextId: number | null }
 function QuizChip({ score }: { score: number }) {
   const pct = Math.round(score * 100);
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${score >= 0.75 ? "bg-good-soft text-good" : "border border-line bg-paper text-muted"}`}>
+    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${score >= 0.75 ? "bg-good-soft text-good" : "bg-[#f1eadc] text-ink/80"}`}>
       {score >= 0.75 ? `quiz ${pct}%` : `quiz ${pct}% · retake`}
     </span>
   );
@@ -197,26 +249,27 @@ export default function CoursePage() {
     <div className="space-y-8">
       <section className="rise-solid relative overflow-hidden rounded-3xl text-white shadow-lg shadow-brand-dark/20">
         <HeroArt />
-        <div className="relative p-6 sm:p-9">
-          <nav className="mb-5 flex flex-wrap items-center gap-1.5 text-sm text-white/75" aria-label="Breadcrumb">
-            <Link href="/" className="hover:text-white hover:underline">
-              My courses
-            </Link>
-            <span aria-hidden>/</span>
-            <span className="text-white">{course.title}</span>
-          </nav>
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="sm:max-w-[62%]">
+        <div className="relative px-6 pt-6 sm:px-9 sm:pt-8">
+          <Link href="/" className="mb-4 inline-flex items-center gap-1 text-sm text-white/85 hover:text-white hover:underline">
+            <span aria-hidden>‹</span> My courses
+          </Link>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-5 sm:gap-x-10">
+            <div className="col-span-2 sm:col-span-1 sm:max-w-2xl">
               <h1 className="text-3xl font-semibold leading-tight text-white sm:text-[2.6rem]">{course.title}</h1>
-              {course.description && <p className="mt-3 text-white/85">{course.description}</p>}
-              <div className="mt-4 flex flex-wrap gap-2 text-xs">
+              {course.description && <p className="mt-3 text-white/90">{course.description}</p>}
+            </div>
+            <div className="col-start-2 row-start-2 self-center sm:row-span-2 sm:row-start-1 sm:mr-6 lg:mr-14">
+              <ProgressRing value={data.progress} />
+            </div>
+            <div className="col-start-1 row-start-2 min-w-0">
+              <div className="flex flex-wrap gap-2 text-xs">
                 {[course.lengthLabel, course.tone, `${data.lessonsTotal} lesson${data.lessonsTotal === 1 ? "" : "s"}`, fmtMinutes(data.minutesTotal)].map((t) => (
                   <span key={t} className="rounded-full border border-white/25 bg-white/10 px-2.5 py-1 backdrop-blur-sm">
                     {t}
                   </span>
                 ))}
               </div>
-              <div className="mt-6 flex flex-wrap items-center gap-3">
+              <div className="mt-5">
                 {nextLesson ? (
                   <Link
                     href={`/lessons/${nextLesson.id}`}
@@ -228,33 +281,28 @@ export default function CoursePage() {
                     </span>
                   </Link>
                 ) : (
-                  <span className="rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold backdrop-blur-sm">You reached the summit. Course complete.</span>
+                  <span className="inline-block rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold backdrop-blur-sm">You reached the summit. Course complete.</span>
                 )}
-                <span className="ml-auto sm:hidden">
-                  <ProgressRing small value={data.progress} />
-                </span>
               </div>
-              {nextLesson && (
-                <p className="mt-3 text-sm text-white/85">
-                  <span className="text-white/65">Up next</span> · {nextLesson.title.replace(/^Lesson \d+:\s*/i, "")}
-                </p>
-              )}
-            </div>
-            <div className="hidden sm:block">
-              <ProgressRing value={data.progress} />
             </div>
           </div>
-          <Trail lessons={allLessons} nextId={data.nextLessonId} />
-          <p className="mt-3 text-xs text-white/75">
+        </div>
+        <Trail lessons={allLessons} nextId={data.nextLessonId}>
+          {nextLesson && (
+            <p className="truncate text-sm text-white">
+              <span className="text-white/75">Up next ·</span> {nextLesson.title.replace(/^Lesson \d+:\s*/i, "")}
+            </p>
+          )}
+          <p className="mt-1 text-xs text-white/85">
             {data.lessonsDone} of {data.lessonsTotal} lessons complete
             {plan && !done && ` · day ${Math.min(plan.dayNumber, plan.totalDays)} of ${plan.totalDays} · target pace ${plan.expectedPercent}%`}
           </p>
-        </div>
+        </Trail>
       </section>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat i={1} icon="book" tint="bg-brand-soft text-brand-dark" label="lessons done" value={`${data.lessonsDone}/${data.lessonsTotal}`} />
-        <Stat i={2} icon="flame" tint="bg-warn-soft text-warn" label="day streak" value={data.streak} animate={data.streak > 0 ? "flame" : ""} />
+        <Stat i={1} icon="book" href="#curriculum" tint="bg-brand-soft text-brand-dark" label="lessons done" value={`${data.lessonsDone}/${data.lessonsTotal}`} />
+        <Stat i={2} icon="flame" href="#sessions" tint="bg-warn-soft text-warn" label="day streak" value={data.streak} animate={data.streak > 0 ? "flame" : ""} />
         <Stat
           i={3}
           icon="target"
@@ -263,7 +311,7 @@ export default function CoursePage() {
           label={data.weakCount === 1 ? "weak spot" : "weak spots"}
           value={data.weakCount}
         />
-        <Stat i={4} icon="cards" href={`/courses/${id}/flashcards`} tint="bg-[#f1eadc] text-ink" label={data.totalCards ? `of ${data.totalCards} cards due` : "flashcards"} value={data.dueCards} />
+        <Stat i={4} icon="cards" href={`/courses/${id}/flashcards`} tint="bg-[#f1eadc] text-ink" label={data.dueCards === 1 ? "card due" : "cards due"} value={data.dueCards} />
       </div>
 
       {plan && !done && (
@@ -278,10 +326,13 @@ export default function CoursePage() {
             </span>
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-            <div className="bar-in h-full rounded-full bg-brand" style={{ width: `${Math.min(100, Math.round((plan.minutesToday / plan.dailyMinutes) * 100))}%` }} />
+            <div
+              className={`bar-in h-full rounded-full ${plan.targetMet ? "bg-[#f6b84a]" : "bg-brand"}`}
+              style={{ width: `${Math.min(100, Math.round((plan.minutesToday / plan.dailyMinutes) * 100))}%` }}
+            />
           </div>
           {plan.targetMet ? (
-            <p className="mt-2 text-sm text-good">You&apos;ve hit today&apos;s target. Come back tomorrow to keep your streak, or keep going.</p>
+            <p className="mt-3 text-sm font-medium text-good">✓ You&apos;ve hit today&apos;s target. Come back tomorrow to keep your streak, or keep going.</p>
           ) : (
             <ul className="mt-3 space-y-2">
               {plan.upNext.map((l) => (
@@ -307,7 +358,7 @@ export default function CoursePage() {
         </Card>
       )}
 
-      <section className="space-y-4">
+      <section id="curriculum" className="scroll-mt-20 space-y-4">
         <h2 className="text-2xl font-semibold">Curriculum</h2>
         {data.modules.map((m, mi) => {
           const doneCount = m.lessons.filter((l) => l.completed_at).length;
@@ -328,9 +379,11 @@ export default function CoursePage() {
                     </span>
                   </div>
                   {m.summary && <p className="mt-1 text-sm text-muted">{m.summary}</p>}
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
-                    <div className="bar-in h-full rounded-full bg-brand" style={{ width: `${modulePct}%` }} />
-                  </div>
+                  {modulePct > 0 && (
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line">
+                      <div className="bar-in h-full rounded-full bg-brand" style={{ width: `${modulePct}%` }} />
+                    </div>
+                  )}
                 </div>
               </div>
               <ol className="mt-4 divide-y divide-line border-y border-line">
@@ -363,7 +416,7 @@ export default function CoursePage() {
                           {l.bestScore !== null && <QuizChip score={l.bestScore} />}
                           {l.est_minutes} min
                         </span>
-                        <span aria-hidden className={`hidden shrink-0 transition group-hover:translate-x-1 sm:block ${isNext ? "text-[#b97a10]" : "text-muted opacity-0 group-hover:opacity-100"}`}>
+                        <span aria-hidden className={`hidden shrink-0 transition group-hover:translate-x-1 sm:block ${isNext ? "text-[#b97a10]" : "text-muted opacity-40 group-hover:opacity-100"}`}>
                           →
                         </span>
                       </Link>
@@ -372,8 +425,13 @@ export default function CoursePage() {
                 })}
               </ol>
               {m.resources.length > 0 && (
-                <details className="mt-3">
-                  <summary className="cursor-pointer text-sm text-muted hover:text-ink">Resources from the web ({m.resources.length})</summary>
+                <details className="group/res mt-3">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 text-sm text-muted hover:text-ink [&::-webkit-details-marker]:hidden">
+                    <span aria-hidden className="inline-block transition-transform group-open/res:rotate-90">
+                      ›
+                    </span>
+                    Resources from the web ({m.resources.length})
+                  </summary>
                   <div className="mt-3">
                     <ResourceList resources={m.resources} />
                   </div>
@@ -385,7 +443,7 @@ export default function CoursePage() {
       </section>
 
       {data.sessions.length > 0 && (
-        <section>
+        <section id="sessions" className="scroll-mt-20">
           <h2 className="mb-3 text-2xl font-semibold">Study sessions</h2>
           <ul className="space-y-3 sm:hidden">
             {data.sessions.map((s) => (

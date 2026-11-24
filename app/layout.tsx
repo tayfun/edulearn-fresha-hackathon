@@ -34,7 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">{children}</main>
+        <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-2 pt-8">{children}</main>
         <footer className="mt-2">
           <FooterArt />
           <div className="bg-brand text-brand-soft">
